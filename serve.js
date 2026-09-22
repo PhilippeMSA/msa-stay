@@ -10,6 +10,7 @@ const types = {
   ".svg": "image/svg+xml",
   ".png": "image/png",
   ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
   ".ico": "image/x-icon",
 };
 
@@ -29,7 +30,8 @@ const server = http.createServer((req, res) => {
       res.end("Not found");
       return;
     }
-    res.writeHead(200, { "Content-Type": types[path.extname(filePath)] || "text/plain" });
+    const ext = path.extname(filePath).toLowerCase();
+    res.writeHead(200, { "Content-Type": types[ext] || "application/octet-stream" });
     res.end(data);
   });
 });

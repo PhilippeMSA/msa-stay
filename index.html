@@ -11,14 +11,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Outfit:wght@300;400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Hind:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="css/styles.css" />
   </head>
   <body>
-    <div class="page-glow" aria-hidden="true"></div>
-
     <header class="site-header">
       <a class="logo" href="#top">
         <span class="logo-mark" aria-hidden="true">
@@ -26,75 +24,162 @@
             <path
               d="M6 20 L20 8 L34 20 V34 H24 V24 H16 V34 H6 Z"
               stroke="currentColor"
-              stroke-width="1.6"
+              stroke-width="1.8"
             />
           </svg>
         </span>
         <span class="logo-text">
-          <strong>MSA Stay</strong>
-          <small>Business accommodations</small>
+          <strong data-i18n="brand">MSA Stay</strong>
+          <small data-i18n="brandTag">Business accommodations</small>
         </span>
       </a>
       <nav class="nav">
-        <a href="#properties">Properties</a>
-        <a href="#companies">For companies</a>
-        <a href="#upcoming">Upcoming</a>
-        <a class="nav-cta" href="#contact">Request a stay</a>
+        <a href="#overview" data-i18n="navOverview">What we do</a>
+        <a href="#cities" data-i18n="navCities">Cities</a>
+        <a href="#how-we-work" data-i18n="navHow">How we work</a>
+        <a href="#upcoming" data-i18n="navUpcoming">Upcoming</a>
+        <a class="nav-cta" href="#contact" data-i18n="navEnquire">Enquire</a>
       </nav>
     </header>
 
     <main id="top">
-      <section class="hero">
-        <p class="eyebrow">Geel · Moerbeke · Knokke</p>
-        <h1>Book a home rather than a hotel room.</h1>
-        <p class="lede">
-          MSA Stay offers private, fully equipped accommodations for business
-          travellers and corporate teams. Space to work, rest, and stay longer —
-          without the hotel feel.
-        </p>
-        <div class="hero-actions">
-          <a class="btn btn-primary" href="#properties">See properties</a>
-          <a class="btn btn-ghost" href="#contact">Talk to us</a>
+      <section id="overview" class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow" data-i18n="heroEyebrow">For companies on assignment</p>
+          <h1 data-i18n="heroTitle">Book a home rather than a hotel room.</h1>
+          <p class="lede" data-i18n="heroLede">
+            MSA Stay lets teams live in a proper home while they work. Private
+            kitchens, desks, and quiet rooms — invoiced as a company stay, not a
+            night in a hotel.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#cities" data-i18n="heroCtaCities">Cities</a>
+            <a class="btn btn-ghost" href="#contact" data-i18n="heroCtaEnquire">Enquire</a>
+          </div>
         </div>
-        <ul class="hero-stats">
-          <li>
-            <span>3</span>
-            Cities live
-          </li>
-          <li>
-            <span>+12</span>
-            Homes coming soon
-          </li>
-          <li>
-            <span>B2B</span>
-            Company-first stays
-          </li>
-        </ul>
+        <aside class="hero-panel">
+          <p class="panel-label" data-i18n="heroPanelLabel">At a glance</p>
+          <ul class="hero-stats">
+            <li>
+              <span>3</span>
+              <span data-i18n="statCities">Cities with homes today</span>
+            </li>
+            <li>
+              <span>+12</span>
+              <span data-i18n="statPipeline">Additional homes in the pipeline</span>
+            </li>
+            <li>
+              <span>B2B</span>
+              <span data-i18n="statB2b">Bookings handled with companies</span>
+            </li>
+          </ul>
+        </aside>
       </section>
 
-      <section id="companies" class="section companies">
+      <section id="cities" class="section">
         <div class="section-head">
-          <p class="eyebrow">Built for business</p>
-          <h2>Accommodations that work like an office — and feel like a home.</h2>
+          <p class="eyebrow" data-i18n="citiesEyebrow">Cities</p>
+          <h2 data-i18n="citiesTitle">Where we have accommodations</h2>
+          <p data-i18n="citiesLede">
+            Homes available now in three Belgian cities. Photos and unit details
+            can be added as the listing grows.
+          </p>
+        </div>
+
+        <div class="city-grid">
+          <a class="city-card-link" href="geel.html" aria-label="View properties in Geel">
+            <article class="city-card">
+              <div
+                class="city-visual city-geel"
+                style="background-image: url('properties/geel/Stationsstraat%2096/Business%20Accommodation%20%27Eclectic%20Living%27/images/Main.JPEG'); background-size: cover; background-position: center;"
+              >
+                <span class="badge" data-i18n="badgeAvailable">Available</span>
+                <span class="city-label">Geel</span>
+              </div>
+              <div class="city-body">
+                <h3 data-i18n="cityGeelTitle">MSA Stay Geel</h3>
+                <p data-i18n="cityGeelBody">
+                  A calm home base in Geel for professionals on assignment.
+                  Private living space instead of a hotel corridor.
+                </p>
+                <ul class="tags">
+                  <li data-i18n="tagWifi">Wi-Fi</li>
+                  <li data-i18n="tagKitchen">Kitchen</li>
+                  <li data-i18n="tagWorkspace">Workspace</li>
+                  <li data-i18n="tagParking">Parking</li>
+                </ul>
+              </div>
+            </article>
+          </a>
+
+          <article class="city-card">
+            <div class="city-visual city-moerbeke">
+              <span class="badge" data-i18n="badgeAvailable">Available</span>
+              <span class="city-label">Moerbeke</span>
+            </div>
+            <div class="city-body">
+              <h3 data-i18n="cityMoerbekeTitle">MSA Stay Moerbeke</h3>
+              <p data-i18n="cityMoerbekeBody">
+                Residential stay in Moerbeke — practical for company teams who
+                need more than a room for the night.
+              </p>
+              <ul class="tags">
+                <li data-i18n="tagWifi">Wi-Fi</li>
+                <li data-i18n="tagKitchen">Kitchen</li>
+                <li data-i18n="tagQuiet">Quiet area</li>
+                <li data-i18n="tagLonger">Longer stays</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="city-card">
+            <div class="city-visual city-knokke">
+              <span class="badge" data-i18n="badgeAvailable">Available</span>
+              <span class="city-label">Knokke</span>
+            </div>
+            <div class="city-body">
+              <h3 data-i18n="cityKnokkeTitle">MSA Stay Knokke</h3>
+              <p data-i18n="cityKnokkeBody">
+                Business-friendly accommodation in Knokke. A home setting for
+                work trips that last more than a weekend.
+              </p>
+              <ul class="tags">
+                <li data-i18n="tagWifi">Wi-Fi</li>
+                <li data-i18n="tagKitchen">Kitchen</li>
+                <li data-i18n="tagWorkspace">Workspace</li>
+                <li data-i18n="tagCompany">Company stays</li>
+              </ul>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="how-we-work" class="section how-we-work">
+        <div class="section-head">
+          <p class="eyebrow" data-i18n="howEyebrow">How we work</p>
+          <h2 data-i18n="howTitle">Set up for business travel that lasts more than a weekend.</h2>
         </div>
         <div class="feature-grid">
           <article class="feature">
-            <h3>Company stays</h3>
-            <p>
+            <p class="index">01</p>
+            <h3 data-i18n="how1Title">Company stays</h3>
+            <p data-i18n="how1Body">
               We mainly work with companies: project teams, contractors, and
               visiting staff who need a reliable base for days or weeks.
             </p>
           </article>
           <article class="feature">
-            <h3>Invoicing &amp; longer stays</h3>
-            <p>
+            <p class="index">02</p>
+            <h3 data-i18n="how2Title">Invoicing &amp; longer stays</h3>
+            <p data-i18n="how2Body">
               Straightforward booking for finance teams, with homes suited to
               extended assignments rather than overnight hotel hops.
             </p>
           </article>
           <article class="feature">
-            <h3>Workspace ready</h3>
-            <p>
+            <p class="index">03</p>
+            <h3 data-i18n="how3Title">Workspace ready</h3>
+            <p data-i18n="how3Body">
               Quiet rooms, Wi-Fi, kitchen, and parking — so people can work late
               and still have a proper place to unwind.
             </p>
@@ -102,107 +187,27 @@
         </div>
       </section>
 
-      <section id="properties" class="section">
-        <div class="section-head">
-          <p class="eyebrow">Available now</p>
-          <h2>Properties we have today</h2>
-          <p>
-            Browse our current homes. Details here are a first prototype —
-            photos and exact unit info can be added next.
-          </p>
-        </div>
-
-        <div class="filters" role="tablist" aria-label="Filter by city">
-          <button class="filter is-active" data-filter="all">All cities</button>
-          <button class="filter" data-filter="geel">Geel</button>
-          <button class="filter" data-filter="moerbeke">Moerbeke</button>
-          <button class="filter" data-filter="knokke">Knokke</button>
-        </div>
-
-        <div class="property-grid">
-          <article class="property" data-city="geel">
-            <div class="property-visual geel">
-              <span class="badge">Available</span>
-              <span class="city-label">Geel</span>
-            </div>
-            <div class="property-body">
-              <h3>MSA Stay Geel</h3>
-              <p>
-                A calm home base in Geel for professionals on assignment.
-                Private living space instead of a hotel corridor.
-              </p>
-              <ul class="tags">
-                <li>Wi-Fi</li>
-                <li>Kitchen</li>
-                <li>Workspace</li>
-                <li>Parking</li>
-              </ul>
-            </div>
-          </article>
-
-          <article class="property" data-city="moerbeke">
-            <div class="property-visual moerbeke">
-              <span class="badge">Available</span>
-              <span class="city-label">Moerbeke</span>
-            </div>
-            <div class="property-body">
-              <h3>MSA Stay Moerbeke</h3>
-              <p>
-                Residential stay in Moerbeke — practical for company teams who
-                need more than a room for the night.
-              </p>
-              <ul class="tags">
-                <li>Wi-Fi</li>
-                <li>Kitchen</li>
-                <li>Quiet area</li>
-                <li>Longer stays</li>
-              </ul>
-            </div>
-          </article>
-
-          <article class="property" data-city="knokke">
-            <div class="property-visual knokke">
-              <span class="badge">Available</span>
-              <span class="city-label">Knokke</span>
-            </div>
-            <div class="property-body">
-              <h3>MSA Stay Knokke</h3>
-              <p>
-                Business-friendly accommodation in Knokke. A home setting for
-                work trips that last more than a weekend.
-              </p>
-              <ul class="tags">
-                <li>Wi-Fi</li>
-                <li>Kitchen</li>
-                <li>Workspace</li>
-                <li>Company stays</li>
-              </ul>
-            </div>
-          </article>
-        </div>
-      </section>
-
       <section id="upcoming" class="section upcoming">
         <div class="section-head">
-          <p class="eyebrow">Pipeline</p>
-          <h2>Upcoming soon</h2>
-          <p>More homes are on the way so teams can stay closer to the job.</p>
+          <p class="eyebrow" data-i18n="upcomingEyebrow">Upcoming</p>
+          <h2 data-i18n="upcomingTitle">Coming soon</h2>
+          <p data-i18n="upcomingLede">More homes so teams can stay closer to the job.</p>
         </div>
         <div class="upcoming-grid">
           <article class="upcoming-card">
             <p class="count">+7</p>
             <h3>Moerbeke</h3>
-            <p>Seven additional properties joining the current Moerbeke stay.</p>
+            <p data-i18n="upcomingMoerbeke">Seven additional properties joining the current Moerbeke stay.</p>
           </article>
           <article class="upcoming-card">
-            <p class="count">New</p>
+            <p class="count" data-i18n="upcomingNew">New</p>
             <h3>Balen</h3>
-            <p>First MSA Stay homes in Balen — expanding inland coverage.</p>
+            <p data-i18n="upcomingBalen">First MSA Stay homes in Balen — expanding inland coverage.</p>
           </article>
           <article class="upcoming-card">
             <p class="count">+5</p>
             <h3>Geel</h3>
-            <p>Five extra properties in Geel to meet growing company demand.</p>
+            <p data-i18n="upcomingGeel">Five extra properties in Geel to meet growing company demand.</p>
           </article>
         </div>
       </section>
@@ -210,41 +215,44 @@
       <section id="contact" class="section contact">
         <div class="contact-panel">
           <div>
-            <p class="eyebrow">Prototype enquiry</p>
-            <h2>Need a home for your team?</h2>
-            <p>
+            <p class="eyebrow" data-i18n="contactEyebrow">Contact</p>
+            <h2 data-i18n="contactTitle">Need a home for your team?</h2>
+            <p data-i18n="contactLede">
               Tell us the city, dates, and how many people. We focus on company
-              bookings and can follow up with availability.
+              bookings and will follow up with availability.
             </p>
           </div>
           <form class="contact-form" action="mailto:hello@msastay.be" method="post" enctype="text/plain">
             <label>
-              Company
-              <input type="text" name="company" placeholder="Your company name" required />
+              <span data-i18n="formCompany">Company</span>
+              <input type="text" name="company" data-i18n-placeholder="formCompanyPh" placeholder="Company name" required />
             </label>
             <label>
-              City
+              <span data-i18n="formCity">City</span>
               <select name="city" required>
-                <option value="">Select a city</option>
+                <option value="" data-i18n="formCitySelect">Select a city</option>
                 <option>Geel</option>
                 <option>Moerbeke</option>
                 <option>Knokke</option>
-                <option>Balen (upcoming)</option>
+                <option data-i18n="formBalen">Balen (upcoming)</option>
               </select>
             </label>
             <label>
-              Message
-              <textarea name="message" rows="4" placeholder="Dates, number of guests, anything we should know"></textarea>
+              <span data-i18n="formMessage">Message</span>
+              <textarea name="message" rows="4" data-i18n-placeholder="formMessagePh" placeholder="Dates, number of guests, anything we should know"></textarea>
             </label>
-            <button class="btn btn-primary" type="submit">Send request</button>
+            <button class="btn btn-primary" type="submit" data-i18n="formSubmit">Send request</button>
           </form>
         </div>
       </section>
     </main>
 
     <footer class="site-footer">
-      <p><strong>MSA Stay</strong> — Book a home rather than a hotel room.</p>
-      <p>Business accommodations · Geel · Moerbeke · Knokke</p>
+      <p>
+        <strong data-i18n="brand">MSA Stay</strong>
+        — <span data-i18n="footerTagline">Book a home rather than a hotel room.</span>
+      </p>
+      <p data-i18n="footerCities">Business accommodations · Geel · Moerbeke · Knokke</p>
     </footer>
 
     <script src="js/main.js"></script>
