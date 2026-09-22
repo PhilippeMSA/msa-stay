@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin — Properties · MSA Stay</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/admin.css" />
+  </head>
+  <body>
+    <header class="admin-header">
+      <a class="admin-brand" href="index.html"><img class="admin-logo" src="../logo.png" alt="MSA Stay" width="160" height="36" /><span class="admin-brand-label">Admin</span></a>
+      <nav class="admin-nav"></nav>
+    </header>
+
+    <main class="admin-main">
+      <div class="admin-toolbar">
+        <div>
+          <h1>Properties</h1>
+          <p class="muted">Edit basics, photos, and amenities without touching website code.</p>
+        </div>
+        <div class="actions" style="margin:0">
+          <button type="button" class="btn" id="geocode-missing">
+            Geocode missing coordinates
+          </button>
+          <a class="btn btn-primary" href="property.html">+ Add property</a>
+        </div>
+      </div>
+
+      <p class="status" id="list-status"></p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Property</th>
+              <th>City</th>
+              <th>Guests</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="property-rows">
+            <tr>
+              <td colspan="4" class="muted">Loading…</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+
+    <script src="js/admin-common.js"></script>
+    <script>
+      (async function () {
+        MSAAdmin.fillAdminNav("index.html");
+        const body = document.getElementById("property-rows");
+        const status = document.getElementById("list-status");
+        try {
+          const data = await MSAAdmin.api("/api/properties");
+          const properties = data.properties || [];
+          if (!properties.length) {
+            body.innerHTML =
+              '<tr><td colspan="4" class="muted">No properties yet. Add one to get started.</td></tr>';
+            return;
+          }
+          body.innerHTML = properties
+            .map(function (p) {
+              const guests =
+                p.basics && p.basics.maxGuests != null ? p.basics.maxGuests : "—";
+              const badge =
+                p.status === "upcoming"
+                  ? '<span class="badge badge-upcoming">Upcoming</span>'
+                  : '<span class="badge">Available</span>';
+              return (
+                '<tr class="clickable" data-id="' +
+                encodeURIComponent(p.id) +
+                '">' +
+                "<td><strong>" +
+                escapeHtml(p.name) +
+                "</strong><div class=\"muted\">" +
+                escapeHtml(p.street || "") +
+                "</div></td>" +
+                "<td>" +
+                escapeHtml(p.city) +
+                "</td>" +
+                "<td>" +
+                guests +
+                "</td>" +
+                "<td>" +
+                badge +
+                (p.hasCoordinates
+                  ? ""
+                  : ' <span class="badge badge-inactive">No coords</span>') +
+                "</td>" +
+                "</tr>"
+              );
+            })
+            .join("");
+
+          body.querySelectorAll("tr.clickable").forEach(function (row) {
+            row.addEventListener("click", function () {
+              location.href =
+                "property.html?id=" + decodeURIComponent(row.getAttribute("data-id"));
+            });
+          });
+        } catch (err) {
+          body.innerHTML =
+            '<tr><td colspan="4" class="muted">Could not load properties.</td></tr>';
+          MSAAdmin.setStatus(status, err.message, "err");
+        }
+
+        document
+          .getElementById("geocode-missing")
+          .addEventListener("click", async function () {
+            MSAAdmin.setStatus(status, "Geocoding missing properties…");
+            try {
+              const data = await MSAAdmin.api("/api/workplace/geocode-missing", {
+                method: "POST",
+                body: "{}",
+              });
+              MSAAdmin.setStatus(
+                status,
+                "Updated " +
+                  data.updated +
+                  " propert" +
+                  (data.updated === 1 ? "y" : "ies") +
+                  (data.failed && data.failed.length
+                    ? "; " + data.failed.length + " failed"
+                    : "") +
+                  ".",
+                "ok"
+              );
+              location.reload();
+            } catch (err) {
+              MSAAdmin.setStatus(status, err.message, "err");
+            }
+          });
+
+        function escapeHtml(value) {
+          return String(value || "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+        }
+      })();
+    </script>
+  </body>
+</html>

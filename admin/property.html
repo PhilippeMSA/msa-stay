@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin — Edit property · MSA Stay</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/admin.css" />
+  </head>
+  <body>
+    <header class="admin-header">
+      <a class="admin-brand" href="index.html"><img class="admin-logo" src="../logo.png" alt="MSA Stay" width="160" height="36" /><span class="admin-brand-label">Admin</span></a>
+      <nav class="admin-nav"></nav>
+    </header>
+
+    <main class="admin-main">
+      <div class="admin-toolbar">
+        <div>
+          <p class="muted"><a href="index.html">← All properties</a></p>
+          <h1 id="page-title">Add property</h1>
+        </div>
+        <a class="btn" id="view-public" href="#" hidden>View public page</a>
+      </div>
+
+      <form id="property-form">
+        <section class="panel">
+          <h2>Basic information</h2>
+          <div class="form-grid two">
+            <label>
+              Property name
+              <input type="text" name="name" required />
+            </label>
+            <label>
+              City
+              <select name="citySlug" id="city-select" required>
+                <option value="">Select a city</option>
+              </select>
+            </label>
+            <label>
+              Street / address
+              <input type="text" name="street" placeholder="e.g. Stationsstraat 96" />
+            </label>
+            <label>
+              Photo folder name
+              <input
+                type="text"
+                name="folder"
+                placeholder="Folder under properties/{city}/{street}/"
+              />
+            </label>
+            <label>
+              Maximum guests
+              <input type="number" name="maxGuests" min="1" step="1" />
+            </label>
+            <label>
+              Bedrooms
+              <input type="number" name="bedrooms" min="0" step="0.5" />
+            </label>
+            <label>
+              Bed type
+              <input type="text" name="bedType" placeholder="e.g. Double bed" />
+            </label>
+            <label>
+              Kitchen type
+              <select name="kitchenType">
+                <option value="">—</option>
+                <option value="Kitchenette">Kitchenette</option>
+                <option value="Full kitchen">Full kitchen</option>
+                <option value="Kitchen">Kitchen</option>
+              </select>
+            </label>
+            <label>
+              Status
+              <select name="status">
+                <option value="available">Available</option>
+                <option value="upcoming">Upcoming</option>
+              </select>
+            </label>
+          </div>
+          <label style="margin-top: 0.85rem">
+            Short description
+            <textarea name="description"></textarea>
+          </label>
+        </section>
+
+        <section class="panel" id="photos-panel">
+          <h2>Photos</h2>
+          <p class="muted">
+            Drag and drop images here, or click to browse. Files are stored under
+            <code>properties/{city}/{street}/{folder}/images/</code>.
+          </p>
+          <div
+            class="dropzone"
+            id="photo-dropzone"
+            tabindex="0"
+            role="button"
+            aria-label="Drop photos here or click to upload"
+          >
+            <input
+              type="file"
+              id="upload-photos"
+              accept=".jpg,.jpeg,.png,.webp,image/*"
+              multiple
+              hidden
+            />
+            <p class="dropzone-title">Drop photos here</p>
+            <p class="muted">JPG, PNG or WebP — click to browse</p>
+          </div>
+          <div class="actions" style="margin-top: 0.75rem">
+            <button type="button" class="btn" id="sync-photos">
+              Sync from folder
+            </button>
+          </div>
+          <ul class="photo-list" id="photo-list" style="margin-top: 0.85rem"></ul>
+          <p class="muted" id="photo-hint"></p>
+        </section>
+
+        <section class="panel">
+          <h2>Location coordinates</h2>
+          <p class="muted">
+            Used for “find accommodation close to your workplace”. Stored once —
+            not re-geocoded on every visitor search.
+          </p>
+          <div class="form-grid two">
+            <label>
+              Latitude
+              <input type="number" name="latitude" step="any" placeholder="e.g. 51.165" />
+            </label>
+            <label>
+              Longitude
+              <input type="number" name="longitude" step="any" placeholder="e.g. 4.989" />
+            </label>
+          </div>
+          <div class="actions" style="margin-top: 0.75rem">
+            <button type="button" class="btn" id="geocode-property">
+              Look up from street + city
+            </button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Amenities</h2>
+          <p class="muted">Select from the central amenity list. Search or filter by category.</p>
+          <div id="amenity-picker"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Services</h2>
+          <p class="muted">Included services available for this property.</p>
+          <div id="service-picker"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Paid services</h2>
+          <p class="muted">Optional extras guests can request. Prices come from the central list.</p>
+          <div id="paid-picker"></div>
+        </section>
+
+        <div class="actions">
+          <button type="submit" class="btn btn-primary">Save property</button>
+          <button type="button" class="btn btn-danger" id="delete-property" hidden>
+            Delete property
+          </button>
+        </div>
+        <p class="status" id="form-status"></p>
+      </form>
+    </main>
+
+    <script src="js/admin-common.js"></script>
+    <script>
+      (async function () {
+        MSAAdmin.fillAdminNav("index.html");
+        const params = new URLSearchParams(location.search);
+        const id = params.get("id");
+        const form = document.getElementById("property-form");
+        const status = document.getElementById("form-status");
+        const photoList = document.getElementById("photo-list");
+        const photoHint = document.getElementById("photo-hint");
+        const viewPublic = document.getElementById("view-public");
+        const deleteBtn = document.getElementById("delete-property");
+        const dropzone = document.getElementById("photo-dropzone");
+        const uploadInput = document.getElementById("upload-photos");
+        let currentImages = [];
+        let currentId = id;
+        let pendingFiles = [];
+        let amenityPicker;
+        let servicePicker;
+        let paidPicker;
+
+        function isImageFile(file) {
+          if (!file) return false;
+          if (file.type && /^image\/(jpeg|png|webp)$/i.test(file.type)) return true;
+          return /\.(jpe?g|png|webp)$/i.test(file.name || "");
+        }
+
+        function updatePhotoHint(property) {
+          const parts = [];
+          if (pendingFiles.length) {
+            parts.push(
+              pendingFiles.length +
+                " photo(s) ready to upload after you save."
+            );
+          }
+          if (property && property.images && property.images.length) {
+            parts.push(property.images.length + " photo(s) linked.");
+          } else if (!pendingFiles.length) {
+            parts.push(
+              currentId
+                ? "No photos linked yet — drop images above."
+                : "Drop images now, then save the property to upload them."
+            );
+          }
+          photoHint.textContent = parts.join(" ");
+        }
+
+        function renderPendingPreviews() {
+          const existing = photoList.querySelectorAll("[data-pending]");
+          existing.forEach(function (el) {
+            el.remove();
+          });
+          pendingFiles.forEach(function (file) {
+            const li = document.createElement("li");
+            li.setAttribute("data-pending", "1");
+            const url = URL.createObjectURL(file);
+            li.innerHTML =
+              '<img src="' +
+              url +
+              '" alt="" /><span>' +
+              file.name +
+              ' <em class="muted">(pending)</em></span>';
+            photoList.appendChild(li);
+          });
+        }
+
+        async function uploadFiles(fileList) {
+          const files = Array.from(fileList || []).filter(isImageFile);
+          if (!files.length) {
+            MSAAdmin.setStatus(status, "Drop JPG, PNG or WebP images only.", "err");
+            return;
+          }
+
+          if (!currentId) {
+            pendingFiles = pendingFiles.concat(files);
+            renderPendingPreviews();
+            updatePhotoHint(null);
+            MSAAdmin.setStatus(
+              status,
+              files.length +
+                " photo(s) queued. Save the property to upload them.",
+              "ok"
+            );
+            return;
+          }
+
+          MSAAdmin.setStatus(status, "Uploading photos…");
+          const body = new FormData();
+          files.forEach(function (file) {
+            body.append("photos", file, file.name);
+          });
+          try {
+            const res = await fetch(
+              "/api/properties/" +
+                encodeURIComponent(currentId) +
+                "/upload",
+              { method: "POST", body: body }
+            );
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Upload failed");
+            fillForm(data.property);
+            MSAAdmin.setStatus(
+              status,
+              "Uploaded " + (data.saved || []).length + " file(s).",
+              "ok"
+            );
+          } catch (err) {
+            MSAAdmin.setStatus(status, err.message, "err");
+          }
+        }
+
+        function imageUrl(property, filename) {
+          function encodeSegment(value) {
+            return encodeURIComponent(String(value || "")).replace(
+              /[!'()*]/g,
+              function (char) {
+                return "%" + char.charCodeAt(0).toString(16).toUpperCase();
+              }
+            );
+          }
+          return [
+            "properties",
+            property.citySlug,
+            property.street,
+            property.folder,
+            "images",
+            filename,
+          ]
+            .map(encodeSegment)
+            .join("/");
+        }
+
+        function renderPhotos(property) {
+          currentImages = property.images || [];
+          photoList.innerHTML = "";
+          if (currentImages.length) {
+            photoList.innerHTML = currentImages
+              .map(function (file) {
+                const src = "../" + imageUrl(property, file);
+                return (
+                  "<li><img src=\"" +
+                  src +
+                  "\" alt=\"\" /><span>" +
+                  file +
+                  "</span></li>"
+                );
+              })
+              .join("");
+          }
+          renderPendingPreviews();
+          updatePhotoHint(property);
+        }
+
+        function fillForm(property) {
+          form.name.value = property.name || "";
+          form.citySlug.value = property.citySlug || "";
+          form.street.value = property.street || "";
+          form.folder.value = property.folder || "";
+          form.maxGuests.value =
+            property.basics && property.basics.maxGuests != null
+              ? property.basics.maxGuests
+              : "";
+          form.bedrooms.value =
+            property.basics && property.basics.bedrooms != null
+              ? property.basics.bedrooms
+              : "";
+          form.bedType.value =
+            (property.basics && property.basics.bedType) || "";
+          form.kitchenType.value =
+            (property.basics && property.basics.kitchen) || "";
+          form.status.value = property.status || "available";
+          form.description.value = property.description || "";
+          form.latitude.value =
+            property.latitude != null ? property.latitude : "";
+          form.longitude.value =
+            property.longitude != null ? property.longitude : "";
+          renderPhotos(property);
+
+          if (amenityPicker) amenityPicker.setSelectedIds(property.amenityIds || []);
+          if (servicePicker) servicePicker.setSelectedIds(property.serviceIds || []);
+          if (paidPicker) paidPicker.setSelectedIds(property.paidServiceIds || []);
+
+          document.getElementById("page-title").textContent = property.name;
+          viewPublic.hidden = false;
+          viewPublic.href = "../property.html?id=" + encodeURIComponent(property.id);
+          deleteBtn.hidden = false;
+        }
+
+        function formPayload() {
+          return {
+            name: form.name.value.trim(),
+            citySlug: form.citySlug.value,
+            street: form.street.value.trim(),
+            folder: form.folder.value.trim() || form.name.value.trim(),
+            maxGuests: form.maxGuests.value === "" ? null : Number(form.maxGuests.value),
+            bedrooms: form.bedrooms.value === "" ? null : Number(form.bedrooms.value),
+            bedType: form.bedType.value.trim() || null,
+            kitchenType: form.kitchenType.value || null,
+            status: form.status.value,
+            description: form.description.value.trim(),
+            latitude:
+              form.latitude.value === "" ? null : Number(form.latitude.value),
+            longitude:
+              form.longitude.value === "" ? null : Number(form.longitude.value),
+            amenityIds: amenityPicker ? amenityPicker.getSelectedIds() : [],
+            serviceIds: servicePicker ? servicePicker.getSelectedIds() : [],
+            paidServiceIds: paidPicker ? paidPicker.getSelectedIds() : [],
+            images: currentImages,
+          };
+        }
+
+        try {
+          const citiesData = await MSAAdmin.api("/api/cities?all=1");
+          const citySelect = document.getElementById("city-select");
+          const presetCity = new URLSearchParams(location.search).get("city");
+          citySelect.innerHTML =
+            '<option value="">Select a city</option>' +
+            (citiesData.cities || [])
+              .filter(function (c) {
+                return c.status !== "hidden";
+              })
+              .map(function (c) {
+                return (
+                  '<option value="' +
+                  c.slug +
+                  '">' +
+                  c.name +
+                  (c.status === "upcoming" ? " (upcoming)" : "") +
+                  "</option>"
+                );
+              })
+              .join("");
+          if (presetCity && !currentId) {
+            citySelect.value = presetCity;
+          }
+
+          const [amenitiesData, servicesData, paidData] = await Promise.all([
+            MSAAdmin.api("/api/amenities"),
+            MSAAdmin.api("/api/services"),
+            MSAAdmin.api("/api/paid-services"),
+          ]);
+
+          amenityPicker = MSAAdmin.createCatalogPicker(
+            document.getElementById("amenity-picker"),
+            {
+              items: amenitiesData.amenities || [],
+              categories: amenitiesData.categories || [],
+              selectedIds: [],
+              emptyLabel: "No amenities selected.",
+            }
+          );
+
+          servicePicker = MSAAdmin.createCatalogPicker(
+            document.getElementById("service-picker"),
+            {
+              items: servicesData.services || [],
+              categories: servicesData.categories || [],
+              selectedIds: [],
+              emptyLabel: "No services selected.",
+            }
+          );
+
+          paidPicker = MSAAdmin.createCatalogPicker(
+            document.getElementById("paid-picker"),
+            {
+              items: paidData.paidServices || [],
+              categories: paidData.categories || [],
+              selectedIds: [],
+              emptyLabel: "No paid extras selected.",
+              getMeta: function (item) {
+                return MSAAdmin.formatPrice(
+                  item.price,
+                  item.currency,
+                  item.pricingType
+                );
+              },
+            }
+          );
+
+          if (currentId) {
+            const data = await MSAAdmin.api(
+              "/api/properties/" + encodeURIComponent(currentId)
+            );
+            fillForm(data.property);
+          } else {
+            updatePhotoHint(null);
+          }
+        } catch (err) {
+          MSAAdmin.setStatus(status, err.message, "err");
+        }
+
+        form.addEventListener("submit", async function (event) {
+          event.preventDefault();
+          MSAAdmin.setStatus(status, "Saving…");
+          try {
+            const payload = formPayload();
+            let property;
+            if (currentId) {
+              property = (
+                await MSAAdmin.api(
+                  "/api/properties/" + encodeURIComponent(currentId),
+                  { method: "PUT", body: JSON.stringify(payload) }
+                )
+              ).property;
+            } else {
+              property = (
+                await MSAAdmin.api("/api/properties", {
+                  method: "POST",
+                  body: JSON.stringify(payload),
+                })
+              ).property;
+              currentId = property.id;
+              history.replaceState({}, "", "property.html?id=" + encodeURIComponent(currentId));
+            }
+            fillForm(property);
+            MSAAdmin.setStatus(status, "Saved.", "ok");
+
+            if (pendingFiles.length) {
+              const queued = pendingFiles.slice();
+              pendingFiles = [];
+              await uploadFiles(queued);
+            }
+          } catch (err) {
+            MSAAdmin.setStatus(status, err.message, "err");
+          }
+        });
+
+        document
+          .getElementById("sync-photos")
+          .addEventListener("click", async function () {
+            if (!currentId) {
+              MSAAdmin.setStatus(status, "Save the property first.", "err");
+              return;
+            }
+            try {
+              const data = await MSAAdmin.api(
+                "/api/properties/" +
+                  encodeURIComponent(currentId) +
+                  "/sync-images",
+                { method: "POST", body: "{}" }
+              );
+              fillForm(data.property);
+              MSAAdmin.setStatus(status, "Photos synced from folder.", "ok");
+            } catch (err) {
+              MSAAdmin.setStatus(status, err.message, "err");
+            }
+          });
+
+        dropzone.addEventListener("click", function () {
+          uploadInput.click();
+        });
+
+        dropzone.addEventListener("keydown", function (event) {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            uploadInput.click();
+          }
+        });
+
+        ["dragenter", "dragover"].forEach(function (eventName) {
+          dropzone.addEventListener(eventName, function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            dropzone.classList.add("is-dragover");
+          });
+        });
+
+        ["dragleave", "drop"].forEach(function (eventName) {
+          dropzone.addEventListener(eventName, function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            dropzone.classList.remove("is-dragover");
+          });
+        });
+
+        dropzone.addEventListener("drop", function (event) {
+          const files = event.dataTransfer && event.dataTransfer.files;
+          uploadFiles(files);
+        });
+
+        uploadInput.addEventListener("change", async function (event) {
+          await uploadFiles(event.target.files);
+          event.target.value = "";
+        });
+
+        document
+          .getElementById("geocode-property")
+          .addEventListener("click", async function () {
+            if (!currentId) {
+              MSAAdmin.setStatus(
+                status,
+                "Save the property first, then look up coordinates.",
+                "err"
+              );
+              return;
+            }
+            MSAAdmin.setStatus(status, "Looking up coordinates…");
+            try {
+              const data = await MSAAdmin.api(
+                "/api/properties/" +
+                  encodeURIComponent(currentId) +
+                  "/geocode",
+                { method: "POST", body: "{}" }
+              );
+              fillForm(data.property);
+              MSAAdmin.setStatus(status, "Coordinates updated from address.", "ok");
+            } catch (err) {
+              MSAAdmin.setStatus(status, err.message, "err");
+            }
+          });
+
+        deleteBtn.addEventListener("click", async function () {
+          if (!currentId) return;
+          if (!confirm("Delete this property? This cannot be undone.")) return;
+          try {
+            await MSAAdmin.api(
+              "/api/properties/" + encodeURIComponent(currentId),
+              { method: "DELETE" }
+            );
+            location.href = "index.html";
+          } catch (err) {
+            MSAAdmin.setStatus(status, err.message, "err");
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>

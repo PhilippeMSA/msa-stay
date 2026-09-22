@@ -18,10 +18,12 @@ Update this file when decisions change.
 
 - Geel
 - Moerbeke
+- Mol
 - Knokke
 
 ### Cities / capacity — upcoming
 
+- Mol **+10**
 - Moerbeke **+7**
 - Balen (**new**)
 - Geel **+5**
@@ -63,34 +65,52 @@ CSS variables live in `css/styles.css` (`:root`).
 
 ## Current site structure
 
-Static multi-page prototype.
+```
+msa-stay/
+  admin/           Admin UI (properties + amenities)
+  css/             Public site styles
+  data/            SQLite database (msa_stay.sqlite)
+  js/              Public site scripts
+  properties/      Photo folders only (city → street → unit → images/)
+  server/          Database helpers (db.js)
+  serve.js         HTTP server + API
+  index.html       Homepage
+  geel.html        Geel listings (loaded from API)
+  moerbeke.html    Moerbeke listings (loaded from API)
+  property.html    Property detail template
+  package.json
+  PROJECT.md
+```
 
-| File | Role |
+| Path | Role |
 |------|------|
-| `index.html` | Homepage |
-| `geel.html` | Geel property listing (9 unit cards) |
-| `css/styles.css` | Styles / design tokens |
-| `js/main.js` | Copy map (EN live, NL ready) + `applyCopy()` |
-| `serve.js` | Local preview server (`node serve.js` → `http://127.0.0.1:8767`) |
-| `PROJECT.md` | This roadmap |
-| `properties/` | Source content: cities → streets → units |
+| `serve.js` | Server + `/api/properties` + `/api/amenities` |
+| `server/db.js` | SQLite schema and queries |
+| `data/msa_stay.sqlite` | Property & amenity data |
+| `admin/` | Manage properties and amenities |
+| `js/properties-client.js` | Public API client |
+| `js/city-listings.js` | Renders city listing cards from API |
+| `js/property-page.js` | Renders property detail from API |
+| `js/main.js` | Homepage copy (EN / NL map) |
+| `properties/` | Image files on disk |
+
+Content (name, guests, description, amenities) is edited in **Admin**, not in code.
 
 ### Homepage sections (top → bottom)
 
 1. Header — logo, nav (What we do, Cities, How we work, Upcoming, Enquire)
 2. Overview / hero — tagline, B2B pitch, stats
-3. Cities — Geel (links to `geel.html`), Moerbeke, Knokke
+3. Cities — Geel → `geel.html`, Moerbeke → `moerbeke.html`, Knokke
 4. How we work — company stays, invoicing, workspace ready
 5. Upcoming — Moerbeke +7, Balen, Geel +5
 6. Contact — mailto form (`hello@msastay.be` placeholder)
 7. Footer
 
-### Geel listing page (`geel.html`)
+### City & property pages
 
-- Shows all 9 Geel units as cards, grouped by street
-- Cover photos when present under each unit’s `images/` folder
-- **Not clickable yet** — detail pages with more photos come later
-- Homepage Geel city card links here
+- Listings: `geel.html` / `moerbeke.html` fetch from API and group by street
+- Detail: `property.html?id=<slug>` loads one property from API
+- Photos: `properties/{city}/{street}/{folder}/images/` (cover preferred as `Main.*`)
 
 ### Language
 
@@ -100,45 +120,21 @@ Static multi-page prototype.
 
 ---
 
-## Property content library (`properties/`)
+## Property photos (`properties/`)
 
-Source of truth for real accommodations. **Not wired into the homepage yet** — homepage stays overview-only until we deliberately connect this.
-
-### Folder layout
+Photos only — property text lives in the database.
 
 ```
 properties/
   {city}/
     {street address}/
-      Business Accommodation '{Unit name}'/
-        Info.txt          ← important facts about the unit
+      {unit folder}/
         images/
-          Main.jpg|jpeg   ← card cover / title image (required when photos exist)
-          …               ← extra photos for detail pages later
+          Main.jpg|jpeg|png   ← card cover when present
+          …
 ```
 
-**Convention:** always name the card cover `Main` (any common image extension). Listing pages use that file first.
-
 City folders present: `geel`, `moerbeke`, `knokke-heist`, `balen`.
-
-### Geel — started (9 units)
-
-| Street | Units |
-|--------|--------|
-| **Stationsstraat 96** | Eclectic Living, Flow Living, Garden Living, Loft Intimate, Natural Living, Scandinavian Living, Urban Living |
-| **Stationstraat 82** | Luxury Loft, Luxury XL |
-
-Note: street spelling differs (`Stationsstraat` vs `Stationstraat`) — keep as on disk until confirmed.
-
-### Status (as of last check)
-
-- Folders + empty `Info.txt` + empty `images/` folders are in place for Geel’s 9 units
-- Fill `Info.txt` and drop photos into each unit’s `images/` when ready
-- Moerbeke / Knokke-Heist / Balen folders exist but have no units yet
-
-### Later use
-
-When we leave homepage-only focus: read this tree for listings, detail pages, and eventually the `msa_stay` database.
 
 ---
 
@@ -147,10 +143,9 @@ When we leave homepage-only focus: read this tree for listings, detail pages, an
 | Asset | Status | Path |
 |--------|--------|------|
 | Property photos | Per unit under `properties/` | `properties/{city}/{street}/.../images/` |
-| Site-wide / hero extras | Optional | `images/` |
-| Logo | Placeholder house SVG | `images/logo.svg` or `images/logo.png` |
+| Logo | Placeholder house SVG in header | (inline in HTML) |
 
-**How to add unit photos:** put files in that unit’s `images/` folder (and fill `Info.txt`). Homepage will stay separate until we connect properties.
+**How to add unit photos:** put files in that unit’s `images/` folder (name cover `Main`), then in Admin open the property → Sync from folder (or Upload).
 
 ---
 
@@ -165,18 +160,37 @@ Local preview: `node serve.js` → `http://127.0.0.1:8767`
 
 ---
 
-## Database & backend (later)
+## Database & admin
 
-Not implemented yet. Suggested names when we add a backend:
+Local SQLite database (no external service):
 
-| Item | Suggested name | Notes |
-|------|----------------|--------|
-| Database | `msa_stay` | Primary app database |
-| Properties table | `properties` | City, address, amenities, status, photos |
-| Enquiries table | `enquiries` | Company, city, message, dates |
-| Companies table | `companies` | B2B clients (optional phase 2) |
+| Item | Path / name |
+|------|-------------|
+| Database file | `data/msa_stay.sqlite` |
+| Tables | `properties`, `amenities`, `property_amenities`, `property_images` |
+| Admin UI | http://127.0.0.1:8767/admin/ |
+| API | `/api/properties`, `/api/amenities`, `/api/cities` |
 
-Stack TBD (e.g. PostgreSQL + API, or Supabase / Firebase). Contact form today uses `mailto:` only.
+Public listing and property pages load from the API. Manage **cities**, properties, and amenities in Admin.
+
+City listings use one template: `city.html?slug=geel` (old `geel.html` / `moerbeke.html` / `mol.html` redirect here).
+
+Start: `npm start` or `node serve.js` (if PowerShell blocks npm: `node serve.js` or `npm.cmd start`)
+
+---
+
+## Later backend (beyond local SQLite)
+
+Already have local SQLite + admin. Next steps when going live:
+
+| Item | Notes |
+|------|--------|
+| Enquiries table | Company, city, message, dates |
+| Companies table | B2B clients (optional) |
+| Auth on `/admin` | Required before public hosting |
+| Hosting | Needs Node (or export) — plain static hosts won’t run SQLite API |
+
+Contact form today uses `mailto:` only.
 
 ---
 
@@ -188,18 +202,19 @@ Stack TBD (e.g. PostgreSQL + API, or Supabase / Firebase). Contact form today us
 - [x] Design system: Inter, Hind, `#3C6169` / white / black / grey
 - [x] Sections: overview, cities, how we work, upcoming, contact
 - [x] EN copy + NL copy map (no switcher UI yet)
-- [x] Geel listing page with 9 unit cards (`geel.html`)
+- [x] Geel & Moerbeke listing pages (API-driven)
+- [x] Shared property detail pages
+- [x] SQLite database + admin for properties & amenities
 
 ### Next
 
-- [ ] Polish homepage until it feels ideal (current focus alongside city pages)
-- [ ] Fill remaining Geel `Info.txt` + `images/` for units still without photos
-- [ ] Make each Geel unit card open a detail page (more photos + Info.txt)
-- [ ] Host on Netlify (or similar) + optional custom domain
+- [ ] Polish homepage until it feels ideal
+- [ ] Add photos for units still without images (via Admin sync/upload)
+- [ ] Host with Node (or similar) + optional custom domain
 - [ ] EN \| NL language toggle in the header
-- [ ] Moerbeke / Knokke / Balen listing pages when content is ready
+- [ ] Knokke / Balen listing pages when content is ready
 - [ ] Real contact email / form backend (not only mailto)
-- [ ] Database `msa_stay` + admin for properties / availability
+- [ ] Admin login before public deploy
 - [ ] Company invoicing / booking flow (B2B)
 
 ---

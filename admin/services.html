@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin — Services · MSA Stay</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/admin.css" />
+  </head>
+  <body>
+    <header class="admin-header">
+      <a class="admin-brand" href="index.html"><img class="admin-logo" src="../logo.png" alt="MSA Stay" width="160" height="36" /><span class="admin-brand-label">Admin</span></a>
+      <nav class="admin-nav"></nav>
+    </header>
+
+    <main class="admin-main">
+      <div class="admin-toolbar">
+        <div>
+          <h1>Services</h1>
+          <p class="muted">
+            Included services available to assign on each property. Prefer
+            disable over delete when a service is already linked.
+          </p>
+        </div>
+      </div>
+
+      <section class="panel">
+        <h2>Add service</h2>
+        <form class="catalog-form" id="add-form">
+          <label>
+            Name
+            <input type="text" id="new-name" required />
+          </label>
+          <label>
+            Category
+            <select id="new-category"></select>
+          </label>
+          <label>
+            Icon id (optional)
+            <input type="text" id="new-icon" />
+          </label>
+          <label>
+            Display order
+            <input type="number" id="new-order" min="0" step="1" />
+          </label>
+          <label class="span-2">
+            Description (optional)
+            <input type="text" id="new-description" />
+          </label>
+          <div class="span-2">
+            <button class="btn btn-primary" type="submit">+ Add service</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>All services</h2>
+          <input type="search" id="filter" placeholder="Filter…" />
+        </div>
+        <div id="service-list">
+          <p class="muted">Loading…</p>
+        </div>
+      </section>
+      <p class="status" id="list-status"></p>
+    </main>
+
+    <script src="js/admin-common.js"></script>
+    <script>
+      (async function () {
+        MSAAdmin.fillAdminNav("services.html");
+        const list = document.getElementById("service-list");
+        const status = document.getElementById("list-status");
+        const filter = document.getElementById("filter");
+        let categories = [];
+        let services = [];
+
+        function render() {
+          const q = filter.value.trim().toLowerCase();
+          const rows = services.filter(function (s) {
+            if (!q) return true;
+            return (
+              s.name.toLowerCase().indexOf(q) !== -1 ||
+              String(s.category || "")
+                .toLowerCase()
+                .indexOf(q) !== -1
+            );
+          });
+          if (!rows.length) {
+            list.innerHTML = '<p class="muted">No services match.</p>';
+            return;
+          }
+          list.innerHTML = rows
+            .map(function (s) {
+              return (
+                '<div class="catalog-row" data-id="' +
+                s.id +
+                '">' +
+                '<div class="catalog-main"><div><strong>' +
+                MSAAdmin.escapeHtml(s.name) +
+                "</strong> " +
+                (s.active
+                  ? ""
+                  : '<span class="badge badge-inactive">Inactive</span>') +
+                '<div class="muted">' +
+                MSAAdmin.escapeHtml(s.category) +
+                " · order " +
+                s.displayOrder +
+                " · used by " +
+                s.usageCount +
+                "</div>" +
+                (s.description
+                  ? '<div class="muted">' +
+                    MSAAdmin.escapeHtml(s.description) +
+                    "</div>"
+                  : "") +
+                "</div></div>" +
+                '<div class="row-actions">' +
+                '<button type="button" class="btn" data-action="edit">Edit</button>' +
+                (s.active
+                  ? '<button type="button" class="btn" data-action="disable">Disable</button>'
+                  : '<button type="button" class="btn" data-action="enable">Enable</button>') +
+                '<button type="button" class="btn btn-danger" data-action="remove">Remove</button>' +
+                "</div></div>"
+              );
+            })
+            .join("");
+        }
+
+        async function load() {
+          const data = await MSAAdmin.api("/api/services");
+          services = data.services || [];
+          categories = data.categories || [];
+          document.getElementById("new-category").innerHTML =
+            MSAAdmin.categoryOptions(categories, "Check-in & support");
+          render();
+        }
+
+        try {
+          await load();
+        } catch (err) {
+          MSAAdmin.setStatus(status, err.message, "err");
+        }
+
+        filter.addEventListener("input", render);
+
+        document
+          .getElementById("add-form")
+          .addEventListener("submit", async function (event) {
+            event.preventDefault();
+            try {
+              await MSAAdmin.api("/api/services", {
+                method: "POST",
+                body: JSON.stringify({
+                  name: document.getElementById("new-name").value,
+                  category: document.getElementById("new-category").value,
+                  icon: document.getElementById("new-icon").value,
+                  description: document.getElementById("new-description").value,
+                  displayOrder: document.getElementById("new-order").value
+                    ? Number(document.getElementById("new-order").value)
+                    : undefined,
+                }),
+              });
+              event.target.reset();
+              document.getElementById("new-category").innerHTML =
+                MSAAdmin.categoryOptions(categories, "Check-in & support");
+              await load();
+              MSAAdmin.setStatus(status, "Service added.", "ok");
+            } catch (err) {
+              MSAAdmin.setStatus(status, err.message, "err");
+            }
+          });
+
+        list.addEventListener("click", async function (event) {
+          const btn = event.target.closest("button[data-action]");
+          if (!btn) return;
+          const row = btn.closest(".catalog-row");
+          const id = Number(row.getAttribute("data-id"));
+          const action = btn.getAttribute("data-action");
+          const item = services.find(function (s) {
+            return s.id === id;
+          });
+          if (!item) return;
+          try {
+            if (action === "edit") {
+              const name = prompt("Name", item.name);
+              if (name == null) return;
+              const category = prompt(
+                "Category (" + categories.join(", ") + ")",
+                item.category
+              );
+              if (category == null) return;
+              const icon = prompt("Icon id (optional)", item.icon || "");
+              if (icon == null) return;
+              const description = prompt(
+                "Description (optional)",
+                item.description || ""
+              );
+              if (description == null) return;
+              const orderRaw = prompt(
+                "Display order",
+                String(item.displayOrder)
+              );
+              if (orderRaw == null) return;
+              await MSAAdmin.api("/api/services/" + id, {
+                method: "PUT",
+                body: JSON.stringify({
+                  name: name.trim(),
+                  category: category.trim(),
+                  icon: icon.trim(),
+                  description: description.trim(),
+                  displayOrder: Number(orderRaw) || 0,
+                }),
+              });
+            } else if (action === "disable") {
+              await MSAAdmin.api("/api/services/" + id, {
+                method: "PUT",
+                body: JSON.stringify({ active: false }),
+              });
+            } else if (action === "enable") {
+              await MSAAdmin.api("/api/services/" + id, {
+                method: "PUT",
+                body: JSON.stringify({ active: true }),
+              });
+            } else if (action === "remove") {
+              const result = await MSAAdmin.api("/api/services/" + id, {
+                method: "DELETE",
+              });
+              MSAAdmin.setStatus(
+                status,
+                result.deactivated
+                  ? "Service is in use, so it was disabled."
+                  : "Service deleted.",
+                "ok"
+              );
+              await load();
+              return;
+            }
+            await load();
+            MSAAdmin.setStatus(status, "Updated.", "ok");
+          } catch (err) {
+            MSAAdmin.setStatus(status, err.message, "err");
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>

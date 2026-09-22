@@ -9,8 +9,7 @@ const copy = {
     navOverview: "What we do",
     navCities: "Cities",
     navHow: "How we work",
-    navUpcoming: "Upcoming",
-    navEnquire: "Enquire",
+    navUpcoming: "Growing",
     heroEyebrow: "For companies on assignment",
     heroTitle: "Book a home rather than a hotel room.",
     heroLede:
@@ -18,13 +17,14 @@ const copy = {
     heroCtaCities: "Cities",
     heroCtaEnquire: "Enquire",
     heroPanelLabel: "At a glance",
+    statProperties: "Properties in total",
     statCities: "Cities with homes today",
-    statPipeline: "Additional homes in the pipeline",
+    statPipeline: "New apartments on the way",
     statB2b: "Bookings handled with companies",
     citiesEyebrow: "Cities",
     citiesTitle: "Where we have accommodations",
     citiesLede:
-      "Homes available now in three Belgian cities. Photos and unit details can be added as the listing grows.",
+      "Fully equipped homes for company stays in Geel, Moerbeke, Mol and Knokke.",
     badgeAvailable: "Available",
     cityGeelTitle: "MSA Stay Geel",
     cityGeelBody:
@@ -32,6 +32,9 @@ const copy = {
     cityMoerbekeTitle: "MSA Stay Moerbeke",
     cityMoerbekeBody:
       "Residential stay in Moerbeke — practical for company teams who need more than a room for the night.",
+    cityMolTitle: "MSA Stay Mol",
+    cityMolBody:
+      "A practical base in Mol for company teams on assignment — private living space instead of a hotel stay.",
     cityKnokkeTitle: "MSA Stay Knokke",
     cityKnokkeBody:
       "Business-friendly accommodation in Knokke. A home setting for work trips that last more than a weekend.",
@@ -53,13 +56,15 @@ const copy = {
     how3Title: "Workspace ready",
     how3Body:
       "Quiet rooms, Wi-Fi, kitchen, and parking — so people can work late and still have a proper place to unwind.",
-    upcomingEyebrow: "Upcoming",
-    upcomingTitle: "Coming soon",
-    upcomingLede: "More homes so teams can stay closer to the job.",
-    upcomingMoerbeke: "Seven additional properties joining the current Moerbeke stay.",
+    upcomingEyebrow: "Growing",
+    upcomingTitle: "New locations and more apartments on the way",
+    upcomingLede:
+      "MSA Stay is expanding so your teams can stay closer to more work sites.",
+    upcomingMoerbeke: "Seven more apartments joining our Moerbeke location.",
+    upcomingMol: "Ten more apartments expanding our Mol offering.",
     upcomingNew: "New",
-    upcomingBalen: "First MSA Stay homes in Balen — expanding inland coverage.",
-    upcomingGeel: "Five extra properties in Geel to meet growing company demand.",
+    upcomingBalen: "A new MSA Stay location in Balen for companies inland.",
+    upcomingGeel: "Five additional apartments expanding our Geel offering.",
     contactEyebrow: "Contact",
     contactTitle: "Need a home for your team?",
     contactLede:
@@ -68,12 +73,12 @@ const copy = {
     formCompanyPh: "Company name",
     formCity: "City",
     formCitySelect: "Select a city",
-    formBalen: "Balen (upcoming)",
+    formBalen: "Balen (coming soon)",
     formMessage: "Message",
     formMessagePh: "Dates, number of guests, anything we should know",
     formSubmit: "Send request",
     footerTagline: "Book a home rather than a hotel room.",
-    footerCities: "Business accommodations · Geel · Moerbeke · Knokke",
+    footerCities: "Business accommodations · Geel · Moerbeke · Mol · Knokke",
   },
   nl: {
     brand: "MSA Stay",
@@ -81,7 +86,7 @@ const copy = {
     navOverview: "Wat we doen",
     navCities: "Steden",
     navHow: "Hoe we werken",
-    navUpcoming: "Binnenkort",
+    navUpcoming: "Groei",
     navEnquire: "Aanvraag",
     heroEyebrow: "Voor bedrijven op opdracht",
     heroTitle: "Boek een woning in plaats van een hotelkamer.",
@@ -90,13 +95,14 @@ const copy = {
     heroCtaCities: "Steden",
     heroCtaEnquire: "Aanvraag",
     heroPanelLabel: "In het kort",
+    statProperties: "Properties in totaal",
     statCities: "Steden met woningen vandaag",
-    statPipeline: "Extra woningen in de pijplijn",
+    statPipeline: "Nieuwe appartementen onderweg",
     statB2b: "Boekingen via bedrijven",
     citiesEyebrow: "Steden",
     citiesTitle: "Waar we accommodaties hebben",
     citiesLede:
-      "Woningen beschikbaar in drie Belgische steden. Foto’s en details volgen naarmate het aanbod groeit.",
+      "Volledig uitgeruste woningen voor bedrijfsverblijven in Geel, Moerbeke, Mol en Knokke.",
     badgeAvailable: "Beschikbaar",
     cityGeelTitle: "MSA Stay Geel",
     cityGeelBody:
@@ -104,6 +110,9 @@ const copy = {
     cityMoerbekeTitle: "MSA Stay Moerbeke",
     cityMoerbekeBody:
       "Residentieel verblijf in Moerbeke — praktisch voor bedrijfsteams die meer nodig hebben dan één nacht.",
+    cityMolTitle: "MSA Stay Mol",
+    cityMolBody:
+      "Een praktische basis in Mol voor bedrijfsteams op opdracht — privéwoonruimte in plaats van een hotelverblijf.",
     cityKnokkeTitle: "MSA Stay Knokke",
     cityKnokkeBody:
       "Zakelijke accommodatie in Knokke. Een thuisgevoel voor werktrips die langer duren dan een weekend.",
@@ -125,13 +134,15 @@ const copy = {
     how3Title: "Klaar om te werken",
     how3Body:
       "Rustige kamers, Wi-Fi, keuken en parking — zodat mensen laat kunnen werken en toch fatsoenlijk kunnen ontspannen.",
-    upcomingEyebrow: "Binnenkort",
-    upcomingTitle: "Binnenkort beschikbaar",
-    upcomingLede: "Meer woningen zodat teams dichter bij de job kunnen verblijven.",
-    upcomingMoerbeke: "Zeven extra panden bij het huidige verblijf in Moerbeke.",
+    upcomingEyebrow: "Groei",
+    upcomingTitle: "Nieuwe locaties en meer appartementen onderweg",
+    upcomingLede:
+      "MSA Stay breidt uit zodat uw teams dichter bij meer werklocaties kunnen verblijven.",
+    upcomingMoerbeke: "Zeven extra appartementen bij onze locatie in Moerbeke.",
+    upcomingMol: "Tien extra appartementen die ons aanbod in Mol uitbreiden.",
     upcomingNew: "Nieuw",
-    upcomingBalen: "Eerste MSA Stay-woningen in Balen — uitbreiding inland.",
-    upcomingGeel: "Vijf extra panden in Geel om aan de groeiende vraag te voldoen.",
+    upcomingBalen: "Een nieuwe MSA Stay-locatie in Balen voor bedrijven inland.",
+    upcomingGeel: "Vijf bijkomende appartementen die ons aanbod in Geel uitbreiden.",
     contactEyebrow: "Contact",
     contactTitle: "Een woning nodig voor uw team?",
     contactLede:
@@ -145,7 +156,7 @@ const copy = {
     formMessagePh: "Data, aantal gasten, wat we moeten weten",
     formSubmit: "Verstuur aanvraag",
     footerTagline: "Boek een woning in plaats van een hotelkamer.",
-    footerCities: "Zakelijke accommodaties · Geel · Moerbeke · Knokke",
+    footerCities: "Zakelijke accommodaties · Geel · Moerbeke · Mol · Knokke",
   },
 };
 
@@ -172,3 +183,28 @@ function applyCopy(lang) {
 }
 
 applyCopy(currentLang);
+
+(async function loadHeroStats() {
+  const propertiesEl = document.getElementById("stat-properties-count");
+  const citiesEl = document.getElementById("stat-cities-count");
+  if (!propertiesEl) return;
+
+  try {
+    const res = await fetch("/api/properties", { cache: "no-store" });
+    if (!res.ok) return;
+    const data = await res.json();
+    const properties = data.properties || [];
+    propertiesEl.textContent = String(properties.length);
+
+    if (citiesEl) {
+      const cities = [];
+      properties.forEach(function (p) {
+        const key = (p.citySlug || p.city || "").toLowerCase();
+        if (key && cities.indexOf(key) === -1) cities.push(key);
+      });
+      citiesEl.textContent = String(cities.length);
+    }
+  } catch (err) {
+    /* keep placeholders if API is unavailable */
+  }
+})();

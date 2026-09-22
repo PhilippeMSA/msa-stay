@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin — Paid services · MSA Stay</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/admin.css" />
+  </head>
+  <body>
+    <header class="admin-header">
+      <a class="admin-brand" href="index.html"><img class="admin-logo" src="../logo.png" alt="MSA Stay" width="160" height="36" /><span class="admin-brand-label">Admin</span></a>
+      <nav class="admin-nav"></nav>
+    </header>
+
+    <main class="admin-main">
+      <div class="admin-toolbar">
+        <div>
+          <h1>Paid services</h1>
+          <p class="muted">
+            Optional extras with pricing. Leave price empty until you set it.
+            Disable instead of delete when linked to properties.
+          </p>
+        </div>
+      </div>
+
+      <section class="panel">
+        <h2>Add paid service</h2>
+        <form class="catalog-form" id="add-form">
+          <label>
+            Name
+            <input type="text" id="new-name" required />
+          </label>
+          <label>
+            Category
+            <select id="new-category"></select>
+          </label>
+          <label>
+            Price (optional)
+            <input type="number" id="new-price" min="0" step="0.01" placeholder="Leave empty" />
+          </label>
+          <label>
+            Currency
+            <input type="text" id="new-currency" value="EUR" />
+          </label>
+          <label>
+            Pricing type
+            <select id="new-pricing"></select>
+          </label>
+          <label>
+            Display order
+            <input type="number" id="new-order" min="0" step="1" />
+          </label>
+          <label class="span-2">
+            Description (optional)
+            <input type="text" id="new-description" />
+          </label>
+          <div class="span-2">
+            <button class="btn btn-primary" type="submit">+ Add paid service</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>All paid services</h2>
+          <input type="search" id="filter" placeholder="Filter…" />
+        </div>
+        <div id="paid-list">
+          <p class="muted">Loading…</p>
+        </div>
+      </section>
+      <p class="status" id="list-status"></p>
+    </main>
+
+    <script src="js/admin-common.js"></script>
+    <script>
+      (async function () {
+        MSAAdmin.fillAdminNav("paid-services.html");
+        const list = document.getElementById("paid-list");
+        const status = document.getElementById("list-status");
+        const filter = document.getElementById("filter");
+        let categories = [];
+        let pricingTypes = [];
+        let items = [];
+
+        function pricingOptions(selected) {
+          return pricingTypes
+            .map(function (t) {
+              return (
+                '<option value="' +
+                t +
+                '"' +
+                (t === selected ? " selected" : "") +
+                ">" +
+                t +
+                "</option>"
+              );
+            })
+            .join("");
+        }
+
+        function render() {
+          const q = filter.value.trim().toLowerCase();
+          const rows = items.filter(function (s) {
+            if (!q) return true;
+            return (
+              s.name.toLowerCase().indexOf(q) !== -1 ||
+              String(s.category || "")
+                .toLowerCase()
+                .indexOf(q) !== -1
+            );
+          });
+          if (!rows.length) {
+            list.innerHTML = '<p class="muted">No paid services match.</p>';
+            return;
+          }
+          list.innerHTML = rows
+            .map(function (s) {
+              return (
+                '<div class="catalog-row" data-id="' +
+                s.id +
+                '">' +
+                '<div class="catalog-main"><div><strong>' +
+                MSAAdmin.escapeHtml(s.name) +
+                "</strong> " +
+                (s.active
+                  ? ""
+                  : '<span class="badge badge-inactive">Inactive</span>') +
+                '<div class="muted">' +
+                MSAAdmin.escapeHtml(s.category) +
+                " · " +
+                MSAAdmin.formatPrice(s.price, s.currency, s.pricingType) +
+                " · order " +
+                s.displayOrder +
+                " · used by " +
+                s.usageCount +
+                "</div>" +
+                (s.description
+                  ? '<div class="muted">' +
+                    MSAAdmin.escapeHtml(s.description) +
+                    "</div>"
+                  : "") +
+                "</div></div>" +
+                '<div class="row-actions">' +
+                '<button type="button" class="btn" data-action="edit">Edit</button>' +
+                (s.active
+                  ? '<button type="button" class="btn" data-action="disable">Disable</button>'
+                  : '<button type="button" class="btn" data-action="enable">Enable</button>') +
+                '<button type="button" class="btn btn-danger" data-action="remove">Remove</button>' +
+                "</div></div>"
+              );
+            })
+            .join("");
+        }
+
+        async function load() {
+          const data = await MSAAdmin.api("/api/paid-services");
+          items = data.paidServices || [];
+          categories = data.categories || [];
+          pricingTypes = data.pricingTypes || [];
+          document.getElementById("new-category").innerHTML =
+            MSAAdmin.categoryOptions(categories, "Check-in / check-out");
+          document.getElementById("new-pricing").innerHTML = pricingOptions(
+            "per_stay"
+          );
+          render();
+        }
+
+        try {
+          await load();
+        } catch (err) {
+          MSAAdmin.setStatus(status, err.message, "err");
+        }
+
+        filter.addEventListener("input", render);
+
+        document
+          .getElementById("add-form")
+          .addEventListener("submit", async function (event) {
+            event.preventDefault();
+            try {
+              const priceVal = document.getElementById("new-price").value;
+              await MSAAdmin.api("/api/paid-services", {
+                method: "POST",
+                body: JSON.stringify({
+                  name: document.getElementById("new-name").value,
+                  category: document.getElementById("new-category").value,
+                  description: document.getElementById("new-description").value,
+                  price: priceVal === "" ? null : Number(priceVal),
+                  currency: document.getElementById("new-currency").value,
+                  pricingType: document.getElementById("new-pricing").value,
+                  displayOrder: document.getElementById("new-order").value
+                    ? Number(document.getElementById("new-order").value)
+                    : undefined,
+                }),
+              });
+              event.target.reset();
+              document.getElementById("new-currency").value = "EUR";
+              document.getElementById("new-category").innerHTML =
+                MSAAdmin.categoryOptions(categories, "Check-in / check-out");
+              document.getElementById("new-pricing").innerHTML = pricingOptions(
+                "per_stay"
+              );
+              await load();
+              MSAAdmin.setStatus(status, "Paid service added.", "ok");
+            } catch (err) {
+              MSAAdmin.setStatus(status, err.message, "err");
+            }
+          });
+
+        list.addEventListener("click", async function (event) {
+          const btn = event.target.closest("button[data-action]");
+          if (!btn) return;
+          const row = btn.closest(".catalog-row");
+          const id = Number(row.getAttribute("data-id"));
+          const action = btn.getAttribute("data-action");
+          const item = items.find(function (s) {
+            return s.id === id;
+          });
+          if (!item) return;
+          try {
+            if (action === "edit") {
+              const name = prompt("Name", item.name);
+              if (name == null) return;
+              const category = prompt(
+                "Category (" + categories.join(", ") + ")",
+                item.category
+              );
+              if (category == null) return;
+              const priceRaw = prompt(
+                "Price (empty = on request)",
+                item.price == null ? "" : String(item.price)
+              );
+              if (priceRaw == null) return;
+              const currency = prompt("Currency", item.currency || "EUR");
+              if (currency == null) return;
+              const pricingType = prompt(
+                "Pricing type (" + pricingTypes.join(", ") + ")",
+                item.pricingType
+              );
+              if (pricingType == null) return;
+              const description = prompt(
+                "Description (optional)",
+                item.description || ""
+              );
+              if (description == null) return;
+              const orderRaw = prompt(
+                "Display order",
+                String(item.displayOrder)
+              );
+              if (orderRaw == null) return;
+              await MSAAdmin.api("/api/paid-services/" + id, {
+                method: "PUT",
+                body: JSON.stringify({
+                  name: name.trim(),
+                  category: category.trim(),
+                  price: priceRaw.trim() === "" ? null : Number(priceRaw),
+                  currency: currency.trim(),
+                  pricingType: pricingType.trim(),
+                  description: description.trim(),
+                  displayOrder: Number(orderRaw) || 0,
+                }),
+              });
+            } else if (action === "disable") {
+              await MSAAdmin.api("/api/paid-services/" + id, {
+                method: "PUT",
+                body: JSON.stringify({ active: false }),
+              });
+            } else if (action === "enable") {
+              await MSAAdmin.api("/api/paid-services/" + id, {
+                method: "PUT",
+                body: JSON.stringify({ active: true }),
+              });
+            } else if (action === "remove") {
+              const result = await MSAAdmin.api("/api/paid-services/" + id, {
+                method: "DELETE",
+              });
+              MSAAdmin.setStatus(
+                status,
+                result.deactivated
+                  ? "Paid service is in use, so it was disabled."
+                  : "Paid service deleted.",
+                "ok"
+              );
+              await load();
+              return;
+            }
+            await load();
+            MSAAdmin.setStatus(status, "Updated.", "ok");
+          } catch (err) {
+            MSAAdmin.setStatus(status, err.message, "err");
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>

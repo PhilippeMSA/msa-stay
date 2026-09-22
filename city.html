@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MSA Stay — City</title>
+    <meta name="description" content="Business accommodations by MSA Stay." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Hind:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="logo" href="index.html">
+        <img class="logo-img" src="logo.png" alt="MSA Stay" width="220" height="44" />
+      </a>
+      <nav class="nav">
+        <a href="index.html#overview">What we do</a>
+        <a href="index.html#cities">Cities</a>
+        <a href="index.html#how-we-work">How we work</a>
+        <a href="index.html#upcoming">Growing</a>
+        <a class="nav-cta" href="index.html#contact">Enquire</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="page-hero" id="city-hero">
+        <p class="eyebrow" id="city-eyebrow">City</p>
+        <h1 id="city-title">Properties</h1>
+        <p class="lede" id="city-lede">
+          Business accommodations for company stays.
+        </p>
+        <p class="page-meta" id="city-page-meta">Loading…</p>
+      </section>
+
+      <div id="city-listings" data-city-slug=""></div>
+
+      <section class="section contact">
+        <div class="contact-panel contact-panel--simple">
+          <div>
+            <p class="eyebrow">Enquire</p>
+            <h2 id="city-enquire-title">Interested in a stay?</h2>
+            <p>
+              Tell us which unit suits your team and the dates you need. We
+              focus on company bookings — including upcoming apartments.
+            </p>
+          </div>
+          <a class="btn btn-primary" href="index.html#contact"
+            >Request availability</a
+          >
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p><strong>MSA Stay</strong> — Book a home rather than a hotel room.</p>
+      <p id="city-footer-cities">Business accommodations</p>
+    </footer>
+    <script src="js/properties-client.js"></script>
+    <script src="js/city-page.js"></script>
+    <script src="js/city-listings.js"></script>
+  </body>
+</html>

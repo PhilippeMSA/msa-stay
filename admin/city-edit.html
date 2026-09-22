@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin — Edit city · MSA Stay</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/admin.css" />
+  </head>
+  <body>
+    <header class="admin-header">
+      <a class="admin-brand" href="index.html"><img class="admin-logo" src="../logo.png" alt="MSA Stay" width="160" height="36" /><span class="admin-brand-label">Admin</span></a>
+      <nav class="admin-nav"></nav>
+    </header>
+
+    <main class="admin-main">
+      <div class="admin-toolbar">
+        <div>
+          <p class="muted"><a href="cities.html">← All cities</a></p>
+          <h1 id="page-title">Edit city</h1>
+        </div>
+        <a class="btn" id="view-public" href="#" hidden>View public page</a>
+      </div>
+
+      <form id="city-form" class="panel form-grid two">
+        <label>
+          City name
+          <input type="text" name="name" required />
+        </label>
+        <label>
+          Status
+          <select name="status">
+            <option value="live">Live (show on homepage)</option>
+            <option value="upcoming">Upcoming only</option>
+            <option value="hidden">Hidden</option>
+          </select>
+        </label>
+        <label>
+          Upcoming apartments (+)
+          <input type="number" name="upcomingCount" min="0" step="1" />
+        </label>
+        <label>
+          Sort order
+          <input type="number" name="sortOrder" step="1" />
+        </label>
+        <label style="grid-column: 1 / -1">
+          Short description
+          <textarea name="description" rows="3"></textarea>
+        </label>
+        <div class="actions" style="grid-column: 1 / -1">
+          <button class="btn btn-primary" type="submit">Save city</button>
+          <button class="btn btn-danger" type="button" id="delete-city">
+            Remove city
+          </button>
+          <a class="btn" id="add-property" href="property.html">+ Add property</a>
+        </div>
+        <p class="status" id="form-status" style="grid-column: 1 / -1"></p>
+      </form>
+    </main>
+
+    <script src="js/admin-common.js"></script>
+    <script>
+      (async function () {
+        MSAAdmin.fillAdminNav("cities.html");
+        const params = new URLSearchParams(location.search);
+        const slug = params.get("slug");
+        const form = document.getElementById("city-form");
+        const status = document.getElementById("form-status");
+        if (!slug) {
+          MSAAdmin.setStatus(status, "Missing city slug.", "err");
+          return;
+        }
+
+        try {
+          const data = await MSAAdmin.api(
+            "/api/cities/" + encodeURIComponent(slug)
+          );
+          const city = data.city;
+          form.name.value = city.name;
+          form.status.value = city.status;
+          form.upcomingCount.value = city.upcomingCount;
+          form.sortOrder.value = city.sortOrder;
+          form.description.value = city.description || "";
+          document.getElementById("page-title").textContent = city.name;
+          const view = document.getElementById("view-public");
+          view.hidden = false;
+          view.href = "../" + city.listingPage;
+          document.getElementById("add-property").href =
+            "property.html?city=" + encodeURIComponent(city.slug);
+        } catch (err) {
+          MSAAdmin.setStatus(status, err.message, "err");
+        }
+
+        form.addEventListener("submit", async function (event) {
+          event.preventDefault();
+          try {
+            await MSAAdmin.api("/api/cities/" + encodeURIComponent(slug), {
+              method: "PUT",
+              body: JSON.stringify({
+                name: form.name.value,
+                status: form.status.value,
+                upcomingCount: Number(form.upcomingCount.value),
+                sortOrder: Number(form.sortOrder.value),
+                description: form.description.value,
+              }),
+            });
+            MSAAdmin.setStatus(status, "Saved.", "ok");
+          } catch (err) {
+            MSAAdmin.setStatus(status, err.message, "err");
+          }
+        });
+
+        document
+          .getElementById("delete-city")
+          .addEventListener("click", async function () {
+            if (
+              !confirm(
+                "Remove this city? If it still has properties, it will be hidden instead."
+              )
+            ) {
+              return;
+            }
+            try {
+              const result = await MSAAdmin.api(
+                "/api/cities/" + encodeURIComponent(slug),
+                { method: "DELETE" }
+              );
+              if (result.deactivated) {
+                MSAAdmin.setStatus(
+                  status,
+                  "City still has properties, so it was hidden.",
+                  "ok"
+                );
+              } else {
+                location.href = "cities.html";
+              }
+            } catch (err) {
+              MSAAdmin.setStatus(status, err.message, "err");
+            }
+          });
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin — Cities · MSA Stay</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/admin.css" />
+  </head>
+  <body>
+    <header class="admin-header">
+      <a class="admin-brand" href="index.html"><img class="admin-logo" src="../logo.png" alt="MSA Stay" width="160" height="36" /><span class="admin-brand-label">Admin</span></a>
+      <nav class="admin-nav"></nav>
+    </header>
+
+    <main class="admin-main">
+      <div class="admin-toolbar">
+        <div>
+          <h1>Cities</h1>
+          <p class="muted">
+            Add cities here, then add properties to each city. Live cities appear
+            on the homepage.
+          </p>
+        </div>
+      </div>
+
+      <section class="panel">
+        <h2>Add city</h2>
+        <form id="add-form" class="form-grid two">
+          <label>
+            City name
+            <input type="text" id="new-name" placeholder="e.g. Turnhout" required />
+          </label>
+          <label>
+            Status
+            <select id="new-status">
+              <option value="live">Live (show on homepage)</option>
+              <option value="upcoming">Upcoming only</option>
+              <option value="hidden">Hidden</option>
+            </select>
+          </label>
+          <label>
+            Upcoming apartments (+)
+            <input type="number" id="new-upcoming" min="0" step="1" value="0" />
+          </label>
+          <label>
+            Sort order
+            <input type="number" id="new-sort" step="1" value="10" />
+          </label>
+          <label style="grid-column: 1 / -1">
+            Short description (homepage card)
+            <textarea id="new-description" rows="2"></textarea>
+          </label>
+          <div class="actions" style="grid-column: 1 / -1; margin-top: 0">
+            <button class="btn btn-primary" type="submit">+ Add city</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>All cities</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>City</th>
+                <th>Status</th>
+                <th>Properties</th>
+                <th>Upcoming +</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="city-rows">
+              <tr>
+                <td colspan="5" class="muted">Loading…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <p class="status" id="list-status"></p>
+    </main>
+
+    <script src="js/admin-common.js"></script>
+    <script>
+      (async function () {
+        MSAAdmin.fillAdminNav("cities.html");
+        const rows = document.getElementById("city-rows");
+        const status = document.getElementById("list-status");
+
+        function escapeHtml(value) {
+          return String(value || "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+        }
+
+        async function load() {
+          const data = await MSAAdmin.api("/api/cities?all=1");
+          const cities = data.cities || [];
+          if (!cities.length) {
+            rows.innerHTML =
+              '<tr><td colspan="5" class="muted">No cities yet.</td></tr>';
+            return;
+          }
+          rows.innerHTML = cities
+            .map(function (c) {
+              return (
+                "<tr>" +
+                "<td><strong>" +
+                escapeHtml(c.name) +
+                '</strong><div class="muted">' +
+                escapeHtml(c.slug) +
+                "</div></td>" +
+                "<td>" +
+                escapeHtml(c.status) +
+                "</td>" +
+                "<td>" +
+                c.propertyCount +
+                "</td>" +
+                "<td>" +
+                c.upcomingCount +
+                "</td>" +
+                '<td><a class="btn" href="city-edit.html?slug=' +
+                encodeURIComponent(c.slug) +
+                '">Edit</a> ' +
+                '<a class="btn" href="property.html?city=' +
+                encodeURIComponent(c.slug) +
+                '">+ Property</a></td>' +
+                "</tr>"
+              );
+            })
+            .join("");
+        }
+
+        try {
+          await load();
+        } catch (err) {
+          MSAAdmin.setStatus(status, err.message, "err");
+        }
+
+        document
+          .getElementById("add-form")
+          .addEventListener("submit", async function (event) {
+            event.preventDefault();
+            try {
+              await MSAAdmin.api("/api/cities", {
+                method: "POST",
+                body: JSON.stringify({
+                  name: document.getElementById("new-name").value,
+                  status: document.getElementById("new-status").value,
+                  upcomingCount: Number(
+                    document.getElementById("new-upcoming").value
+                  ),
+                  sortOrder: Number(document.getElementById("new-sort").value),
+                  description: document.getElementById("new-description").value,
+                }),
+              });
+              document.getElementById("add-form").reset();
+              document.getElementById("new-upcoming").value = "0";
+              document.getElementById("new-sort").value = "10";
+              await load();
+              MSAAdmin.setStatus(status, "City added.", "ok");
+            } catch (err) {
+              MSAAdmin.setStatus(status, err.message, "err");
+            }
+          });
+      })();
+    </script>
+  </body>
+</html>

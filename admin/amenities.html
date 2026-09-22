@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin — Amenities · MSA Stay</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/admin.css" />
+  </head>
+  <body>
+    <header class="admin-header">
+      <a class="admin-brand" href="index.html"><img class="admin-logo" src="../logo.png" alt="MSA Stay" width="160" height="36" /><span class="admin-brand-label">Admin</span></a>
+      <nav class="admin-nav"></nav>
+    </header>
+
+    <main class="admin-main">
+      <div class="admin-toolbar">
+        <div>
+          <h1>Amenities</h1>
+          <p class="muted">
+            Central list used by all properties. Disabling keeps existing
+            property links intact.
+          </p>
+        </div>
+      </div>
+
+      <section class="panel">
+        <h2>Add amenity</h2>
+        <form class="catalog-form" id="add-form">
+          <label>
+            Name
+            <input type="text" id="new-name" required placeholder="e.g. Balcony" />
+          </label>
+          <label>
+            Category
+            <select id="new-category"></select>
+          </label>
+          <label>
+            Icon id (optional)
+            <input type="text" id="new-icon" placeholder="e.g. wifi" />
+          </label>
+          <label>
+            Display order
+            <input type="number" id="new-order" min="0" step="1" />
+          </label>
+          <label class="span-2">
+            Description (optional)
+            <input type="text" id="new-description" />
+          </label>
+          <div class="span-2">
+            <button class="btn btn-primary" type="submit">+ Add amenity</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>All amenities</h2>
+          <input type="search" id="filter" placeholder="Filter…" />
+        </div>
+        <div id="amenity-list">
+          <p class="muted">Loading…</p>
+        </div>
+      </section>
+      <p class="status" id="list-status"></p>
+    </main>
+
+    <script src="js/admin-common.js"></script>
+    <script>
+      (async function () {
+        MSAAdmin.fillAdminNav("amenities.html");
+        const list = document.getElementById("amenity-list");
+        const status = document.getElementById("list-status");
+        const filter = document.getElementById("filter");
+        let categories = [];
+        let amenities = [];
+
+        function render() {
+          const q = filter.value.trim().toLowerCase();
+          const rows = amenities.filter(function (a) {
+            if (!q) return true;
+            return (
+              a.name.toLowerCase().indexOf(q) !== -1 ||
+              String(a.category || "")
+                .toLowerCase()
+                .indexOf(q) !== -1
+            );
+          });
+          if (!rows.length) {
+            list.innerHTML = '<p class="muted">No amenities match.</p>';
+            return;
+          }
+          list.innerHTML = rows
+            .map(function (a) {
+              return (
+                '<div class="catalog-row" data-id="' +
+                a.id +
+                '">' +
+                '<div class="catalog-main">' +
+                "<div><strong>" +
+                MSAAdmin.escapeHtml(a.name) +
+                "</strong> " +
+                (a.active
+                  ? ""
+                  : '<span class="badge badge-inactive">Inactive</span>') +
+                '<div class="muted">' +
+                MSAAdmin.escapeHtml(a.category) +
+                " · order " +
+                a.displayOrder +
+                " · used by " +
+                a.usageCount +
+                " propert" +
+                (a.usageCount === 1 ? "y" : "ies") +
+                (a.icon
+                  ? " · icon " + MSAAdmin.escapeHtml(a.icon)
+                  : "") +
+                "</div>" +
+                (a.description
+                  ? '<div class="muted">' +
+                    MSAAdmin.escapeHtml(a.description) +
+                    "</div>"
+                  : "") +
+                "</div></div>" +
+                '<div class="row-actions">' +
+                '<button type="button" class="btn" data-action="edit">Edit</button>' +
+                (a.active
+                  ? '<button type="button" class="btn" data-action="disable">Disable</button>'
+                  : '<button type="button" class="btn" data-action="enable">Enable</button>') +
+                '<button type="button" class="btn btn-danger" data-action="remove">Remove</button>' +
+                "</div></div>"
+              );
+            })
+            .join("");
+        }
+
+        async function load() {
+          const data = await MSAAdmin.api("/api/amenities");
+          amenities = data.amenities || [];
+          categories = data.categories || [];
+          document.getElementById("new-category").innerHTML =
+            MSAAdmin.categoryOptions(categories, "General");
+          render();
+        }
+
+        try {
+          await load();
+        } catch (err) {
+          MSAAdmin.setStatus(status, err.message, "err");
+        }
+
+        filter.addEventListener("input", render);
+
+        document
+          .getElementById("add-form")
+          .addEventListener("submit", async function (event) {
+            event.preventDefault();
+            try {
+              await MSAAdmin.api("/api/amenities", {
+                method: "POST",
+                body: JSON.stringify({
+                  name: document.getElementById("new-name").value,
+                  category: document.getElementById("new-category").value,
+                  icon: document.getElementById("new-icon").value,
+                  description: document.getElementById("new-description").value,
+                  displayOrder: document.getElementById("new-order").value
+                    ? Number(document.getElementById("new-order").value)
+                    : undefined,
+                }),
+              });
+              event.target.reset();
+              document.getElementById("new-category").innerHTML =
+                MSAAdmin.categoryOptions(categories, "General");
+              await load();
+              MSAAdmin.setStatus(status, "Amenity added.", "ok");
+            } catch (err) {
+              MSAAdmin.setStatus(status, err.message, "err");
+            }
+          });
+
+        list.addEventListener("click", async function (event) {
+          const btn = event.target.closest("button[data-action]");
+          if (!btn) return;
+          const row = btn.closest(".catalog-row");
+          const id = Number(row.getAttribute("data-id"));
+          const action = btn.getAttribute("data-action");
+          const item = amenities.find(function (a) {
+            return a.id === id;
+          });
+          if (!item) return;
+          try {
+            if (action === "edit") {
+              const name = prompt("Name", item.name);
+              if (name == null) return;
+              const category = prompt(
+                "Category (" + categories.join(", ") + ")",
+                item.category
+              );
+              if (category == null) return;
+              const icon = prompt("Icon id (optional)", item.icon || "");
+              if (icon == null) return;
+              const description = prompt(
+                "Description (optional)",
+                item.description || ""
+              );
+              if (description == null) return;
+              const orderRaw = prompt(
+                "Display order",
+                String(item.displayOrder)
+              );
+              if (orderRaw == null) return;
+              await MSAAdmin.api("/api/amenities/" + id, {
+                method: "PUT",
+                body: JSON.stringify({
+                  name: name.trim(),
+                  category: category.trim(),
+                  icon: icon.trim(),
+                  description: description.trim(),
+                  displayOrder: Number(orderRaw) || 0,
+                }),
+              });
+            } else if (action === "disable") {
+              await MSAAdmin.api("/api/amenities/" + id, {
+                method: "PUT",
+                body: JSON.stringify({ active: false }),
+              });
+            } else if (action === "enable") {
+              await MSAAdmin.api("/api/amenities/" + id, {
+                method: "PUT",
+                body: JSON.stringify({ active: true }),
+              });
+            } else if (action === "remove") {
+              const result = await MSAAdmin.api("/api/amenities/" + id, {
+                method: "DELETE",
+              });
+              if (result.deactivated) {
+                MSAAdmin.setStatus(
+                  status,
+                  "Amenity is still used by properties, so it was disabled instead of deleted.",
+                  "ok"
+                );
+              } else {
+                MSAAdmin.setStatus(status, "Amenity deleted.", "ok");
+              }
+              await load();
+              return;
+            }
+            await load();
+            MSAAdmin.setStatus(status, "Updated.", "ok");
+          } catch (err) {
+            MSAAdmin.setStatus(status, err.message, "err");
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>

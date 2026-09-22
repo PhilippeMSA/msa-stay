@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MSA Stay — Property</title>
+    <meta name="description" content="Business accommodation by MSA Stay." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Hind:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="logo" href="index.html">
+        <img class="logo-img" src="logo.png" alt="MSA Stay" width="220" height="44" />
+      </a>
+      <nav class="nav">
+        <a href="index.html#overview">What we do</a>
+        <a href="index.html#cities">Cities</a>
+        <a href="index.html#how-we-work">How we work</a>
+        <a href="index.html#upcoming">Growing</a>
+        <a class="nav-cta" href="index.html#contact">Enquire</a>
+      </nav>
+    </header>
+
+    <main id="property-page" class="property-page" hidden>
+      <div class="property-top">
+        <a class="back-link" id="property-back" href="index.html">← Back to city</a>
+        <p class="eyebrow" id="property-city"></p>
+        <h1 id="property-name"></h1>
+        <p class="page-meta" id="property-address"></p>
+        <span class="badge property-status-badge" id="property-status" hidden></span>
+      </div>
+
+      <section class="section property-section" aria-labelledby="photos-heading">
+        <h2 id="photos-heading" class="property-section-title">Photos</h2>
+        <div class="gallery" id="property-gallery">
+          <div class="gallery-main">
+            <img id="gallery-main-img" src="" alt="" />
+          </div>
+          <div class="gallery-thumbs" id="gallery-thumbs"></div>
+        </div>
+      </section>
+
+      <section class="section property-section property-section--soft" aria-labelledby="basics-heading">
+        <h2 id="basics-heading" class="property-section-title">Basic information</h2>
+        <dl class="basics-grid" id="property-basics"></dl>
+      </section>
+
+      <section class="section property-section" aria-labelledby="about-heading">
+        <h2 id="about-heading" class="property-section-title">About this stay</h2>
+        <p class="property-description" id="property-description"></p>
+      </section>
+
+      <section class="section property-section property-section--soft" aria-labelledby="included-heading">
+        <h2 id="included-heading" class="property-section-title">What’s included</h2>
+        <div id="property-amenities"></div>
+      </section>
+
+      <section class="section property-section" id="property-services-section" hidden aria-labelledby="services-heading">
+        <h2 id="services-heading" class="property-section-title">Services</h2>
+        <div id="property-services"></div>
+      </section>
+
+      <section class="section property-section property-section--soft" id="property-paid-section" hidden aria-labelledby="paid-heading">
+        <h2 id="paid-heading" class="property-section-title">Paid extras</h2>
+        <div id="property-paid-services"></div>
+      </section>
+
+      <section class="section contact">
+        <div class="contact-panel contact-panel--simple">
+          <div>
+            <p class="eyebrow">Enquire</p>
+            <h2 id="property-enquire-title">Interested in this apartment?</h2>
+            <p id="property-enquire-body">
+              Tell us your dates and how many people. We focus on company
+              bookings.
+            </p>
+          </div>
+          <a class="btn btn-primary" href="index.html#contact">Request availability</a>
+        </div>
+      </section>
+    </main>
+
+    <main id="property-missing" class="section" hidden>
+      <h1>Property not found</h1>
+      <p class="lede">Please return to the city list and choose an apartment.</p>
+      <a class="btn btn-primary" href="index.html#cities">View cities</a>
+    </main>
+
+    <footer class="site-footer">
+      <p><strong>MSA Stay</strong> — Book a home rather than a hotel room.</p>
+      <p>Business accommodations · Geel · Moerbeke · Mol · Knokke</p>
+    </footer>
+
+    <script src="js/properties-client.js"></script>
+    <script src="js/property-page.js"></script>
+  </body>
+</html>
