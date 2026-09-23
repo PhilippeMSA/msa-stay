@@ -6,6 +6,9 @@ const MODE_PROFILES = {
   car: "driving-car",
   bicycle: "cycling-regular",
   walking: "foot-walking",
+  foot: "foot-walking",
+  // ORS has no transit matrix; bus uses road routing as an estimate.
+  bus: "driving-car",
 };
 
 function isConfigured() {
@@ -180,7 +183,7 @@ async function geocodeAddress(text, { country = "BE" } = {}) {
 async function routeMatrix(locations, mode) {
   const profile = profileForMode(mode);
   if (!profile) {
-    const err = new Error("Choose car, bicycle, or walking.");
+    const err = new Error("Choose car, bicycle, foot, or bus.");
     err.code = "BAD_MODE";
     err.status = 400;
     throw err;

@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Availability calendar · MSA Stay</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/staff.css" />
+    <link rel="icon" href="../assets/favicon.ico" sizes="any" />
+    <meta name="theme-color" content="#3C6169" />
+  </head>
+  <body>
+    <header class="staff-header">
+      <a class="staff-brand" href="calendar.html"
+        ><img
+          class="staff-logo"
+          src="../assets/logo.png"
+          alt="MSA Stay"
+          width="160"
+          height="36"
+        /><span class="staff-brand-label">Staff</span></a
+      >
+      <nav class="staff-nav"></nav>
+    </header>
+
+    <main class="staff-main">
+      <div class="toolbar">
+        <div>
+          <h1>Availability</h1>
+          <p class="muted" id="role-hint">Loading…</p>
+        </div>
+        <div class="toolbar-group view-toggle">
+          <button type="button" class="btn is-active" data-view="week">Week</button>
+          <button type="button" class="btn" data-view="month">Month</button>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <div class="toolbar-group">
+          <button type="button" class="btn" id="prev-range">‹</button>
+          <button type="button" class="btn" id="today-btn">Today</button>
+          <button type="button" class="btn" id="next-range">›</button>
+          <strong id="range-label"></strong>
+        </div>
+        <div class="toolbar-group">
+          <select id="city-filter">
+            <option value="">All cities</option>
+          </select>
+          <select id="property-filter">
+            <option value="">All properties</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="legend" id="status-legend"></div>
+      <div class="legend legend-tasks" id="task-legend"></div>
+
+      <p class="status" id="status"></p>
+      <div id="calendar-root"></div>
+
+      <section class="panel" id="editor" hidden>
+        <h2 id="editor-title">Add reservation</h2>
+        <form class="form-grid" id="block-form">
+          <input type="hidden" id="block-id" />
+          <label class="span-2">
+            Property
+            <select id="block-property" required></select>
+          </label>
+          <label>
+            Start / check-in (DD/MM/YYYY)
+            <input
+              type="text"
+              id="block-start"
+              required
+              placeholder="DD/MM/YYYY"
+              inputmode="numeric"
+              autocomplete="off"
+            />
+          </label>
+          <label>
+            End / check-out (DD/MM/YYYY)
+            <input
+              type="text"
+              id="block-end"
+              required
+              placeholder="DD/MM/YYYY"
+              inputmode="numeric"
+              autocomplete="off"
+            />
+          </label>
+          <label>
+            Type
+            <select id="block-status"></select>
+          </label>
+          <label id="guests-wrap">
+            Guests
+            <input
+              type="number"
+              id="block-guests"
+              min="0"
+              step="1"
+              placeholder="e.g. 2"
+            />
+          </label>
+          <label class="span-2">
+            Note (optional)
+            <input type="text" id="block-note" maxlength="200" />
+          </label>
+          <div class="span-2" id="day-tasks-wrap" hidden>
+            <h3 class="bulk-section-title">Daily tasks</h3>
+            <p class="muted">
+              Every reservation day has a Check. Add extras for any day; check-in
+              and check-out days can include those tasks too. Assign a staff
+              member to each task for their schedule.
+            </p>
+            <div id="day-tasks" class="day-tasks"></div>
+          </div>
+          <div class="span-2 form-actions">
+            <button class="btn btn-primary" type="submit" id="save-block">
+              Save
+            </button>
+            <button class="btn" type="button" id="cancel-edit">Cancel</button>
+            <button class="btn btn-danger" type="button" id="delete-block" hidden>
+              Delete
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel" id="viewer" hidden>
+        <h2 id="viewer-title">Reservation</h2>
+        <div id="viewer-body"></div>
+        <div class="form-actions" style="margin-top: 0.75rem">
+          <button type="button" class="btn" id="close-viewer">Close</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="js/staff-common.js"></script>
+    <script>
+      (async function () {
+        const status = document.getElementById("status");
+        const root = document.getElementById("calendar-root");
+        const rangeLabel = document.getElementById("range-label");
+        const cityFilter = document.getElementById("city-filter");
+        const propertyFilter = document.getElementById("property-filter");
+        const editor = document.getElementById("editor");
+        const roleHint = document.getElementById("role-hint");
+
+        const me = await MSAStaff.requireAuth();
+        if (!me) return;
+
+        const user = me.user;
+        const canEdit = MSAStaff.canEditOps(user);
+        const statusList = me.statuses || ["booked", "blocked", "hold"];
+        const statusLabels = me.statusLabels || {};
+        const dayTaskLabels = me.dayTaskLabels || {
+          check: "Check",
+          bed_change: "Bed change",
+          towels_change: "Towels change",
+          clean_up: "Clean up",
+          check_in: "Check in",
+          check_out: "Check out",
+        };
+        const dailyTaskTypes = me.dailyTaskTypes || [
+          "check",
+          "bed_change",
+          "towels_change",
+          "clean_up",
+        ];
+        const checkInTaskTypes = me.checkInTaskTypes || ["check_in"];
+        const checkOutTaskTypes = me.checkOutTaskTypes || ["check_out"];
+        const viewer = document.getElementById("viewer");
+        let draftTasks = [];
+        let staffUsers = [];
+
+        MSAStaff.fillHeader(user);
+        roleHint.textContent = canEdit
+          ? "Manager — edit reservations, guests, and daily tasks."
+          : "Staff — view reservations, guests, and daily tasks.";
+
+        function statusLabel(status) {
+          return statusLabels[status] || String(status || "").replace(/_/g, " ");
+        }
+
+        function taskLabel(type) {
+          return dayTaskLabels[type] || String(type || "").replace(/_/g, " ");
+        }
+
+        function fillStatusUi() {
+          document.getElementById("status-legend").innerHTML = statusList
+            .map(function (s) {
+              return (
+                '<span><i class="swatch swatch-' +
+                MSAStaff.escapeHtml(s) +
+                '"></i> ' +
+                MSAStaff.escapeHtml(statusLabel(s)) +
+                "</span>"
+              );
+            })
+            .join("");
+          document.getElementById("task-legend").innerHTML =
+            "<strong class=\"legend-title\">Daily tasks:</strong> " +
+            Object.keys(dayTaskLabels)
+              .map(function (s) {
+                return (
+                  '<span><i class="swatch swatch-' +
+                  MSAStaff.escapeHtml(s) +
+                  '"></i> ' +
+                  MSAStaff.escapeHtml(taskLabel(s)) +
+                  "</span>"
+                );
+              })
+              .join("");
+          if (canEdit) {
+            document.getElementById("block-status").innerHTML = statusList
+              .map(function (s) {
+                return (
+                  '<option value="' +
+                  MSAStaff.escapeHtml(s) +
+                  '">' +
+                  MSAStaff.escapeHtml(statusLabel(s)) +
+                  "</option>"
+                );
+              })
+              .join("");
+          }
+        }
+
+        fillStatusUi();
+
+        if (canEdit) {
+          const addBtn = document.createElement("button");
+          addBtn.type = "button";
+          addBtn.className = "btn btn-primary";
+          addBtn.id = "add-block";
+          addBtn.textContent = "+ Add reservation";
+          document.querySelector(".toolbar .view-toggle").appendChild(addBtn);
+        } else if (editor) {
+          editor.remove();
+        }
+
+        let view = "week";
+        let anchor = new Date();
+        let properties = [];
+        let blocks = [];
+
+        function propertiesForCity(citySlug) {
+          return properties.filter(function (p) {
+            return !citySlug || p.citySlug === citySlug;
+          });
+        }
+
+        function filteredProperties() {
+          const city = cityFilter.value;
+          const propertyId = propertyFilter.value;
+          return propertiesForCity(city).filter(function (p) {
+            if (propertyId && p.id !== propertyId) return false;
+            return true;
+          });
+        }
+
+        function rangeBounds() {
+          if (view === "week") {
+            const start = MSAStaff.startOfWeek(anchor);
+            const end = MSAStaff.addDays(start, 6);
+            return { start: start, end: end };
+          }
+          const start = MSAStaff.startOfMonth(anchor);
+          const end = MSAStaff.endOfMonth(anchor);
+          return { start: start, end: end };
+        }
+
+        function updateRangeLabel() {
+          const bounds = rangeBounds();
+          if (view === "week") {
+            rangeLabel.textContent =
+              MSAStaff.formatDateDMY(bounds.start) +
+              " → " +
+              MSAStaff.formatDateDMY(bounds.end);
+          } else {
+            rangeLabel.textContent = anchor.toLocaleString("en-GB", {
+              month: "long",
+              year: "numeric",
+            });
+          }
+        }
+
+        function propertyOptionHtml(list, withCityPrefix) {
+          return list
+            .map(function (p) {
+              const label = withCityPrefix
+                ? p.city + " · " + p.name
+                : p.name;
+              return (
+                '<option value="' +
+                MSAStaff.escapeHtml(p.id) +
+                '">' +
+                MSAStaff.escapeHtml(label) +
+                "</option>"
+              );
+            })
+            .join("");
+        }
+
+        function refreshPropertyFilter() {
+          const city = cityFilter.value;
+          const list = propertiesForCity(city);
+          const previous = propertyFilter.value;
+          const stillValid = list.some(function (p) {
+            return p.id === previous;
+          });
+          propertyFilter.innerHTML =
+            '<option value="">All properties</option>' +
+            propertyOptionHtml(list, !city);
+          propertyFilter.value = stillValid ? previous : "";
+
+          if (canEdit) {
+            const editorSelect = document.getElementById("block-property");
+            const editorPrev = editorSelect.value;
+            editorSelect.innerHTML = propertyOptionHtml(list, !city);
+            if (
+              list.some(function (p) {
+                return p.id === editorPrev;
+              })
+            ) {
+              editorSelect.value = editorPrev;
+            } else if (list[0]) {
+              editorSelect.value = list[0].id;
+            }
+          }
+        }
+
+        function fillCityFilter() {
+          const cities = [];
+          properties.forEach(function (p) {
+            if (
+              cities.every(function (c) {
+                return c.slug !== p.citySlug;
+              })
+            ) {
+              cities.push({ slug: p.citySlug, name: p.city });
+            }
+          });
+          cityFilter.innerHTML =
+            '<option value="">All cities</option>' +
+            cities
+              .map(function (c) {
+                return (
+                  '<option value="' +
+                  MSAStaff.escapeHtml(c.slug) +
+                  '">' +
+                  MSAStaff.escapeHtml(c.name) +
+                  "</option>"
+                );
+              })
+              .join("");
+          refreshPropertyFilter();
+        }
+
+        function blocksForDay(iso, propertyId) {
+          return blocks.filter(function (b) {
+            if (propertyId && b.propertyId !== propertyId) return false;
+            return b.startDate <= iso && b.endDate >= iso;
+          });
+        }
+
+        function tasksForDay(block, iso) {
+          return (block.tasks || []).filter(function (t) {
+            return t.date === iso;
+          });
+        }
+
+        function blockTitle(block, iso) {
+          const label = block.statusLabel || statusLabel(block.status);
+          const guests =
+            block.status === "booked" && block.guestCount != null
+              ? " · " + block.guestCount + " guests"
+              : "";
+          const dayTasks = iso ? tasksForDay(block, iso) : block.tasks || [];
+          const taskBits = dayTasks
+            .map(function (t) {
+              return taskLabel(t.type);
+            })
+            .join(", ");
+          return (
+            (block.propertyName || "") +
+            " · " +
+            label +
+            guests +
+            (taskBits ? " · " + taskBits : "") +
+            (block.note ? " — " + block.note : "")
+          );
+        }
+
+        function blockLabelText(block) {
+          const label = block.statusLabel || statusLabel(block.status);
+          const guests =
+            block.status === "booked" && block.guestCount != null
+              ? " · " + block.guestCount + " guests"
+              : "";
+          return label + guests;
+        }
+
+        function taskShort(type) {
+          if (type === "check") return "✓";
+          if (type === "check_in") return "In";
+          if (type === "check_out") return "Out";
+          if (type === "bed_change") return "Bed";
+          if (type === "towels_change") return "Towels";
+          if (type === "clean_up") return "Clean";
+          return taskLabel(type);
+        }
+
+        function dayTaskChipsHtml(block, iso) {
+          const tasks = tasksForDay(block, iso);
+          if (!tasks.length) return "";
+          return (
+            '<div class="cal-day-tasks">' +
+            tasks
+              .map(function (t) {
+                return (
+                  '<span class="cal-task-dot cal-task-dot-' +
+                  MSAStaff.escapeHtml(t.type) +
+                  '" title="' +
+                  MSAStaff.escapeHtml(taskLabel(t.type)) +
+                  '">' +
+                  MSAStaff.escapeHtml(taskShort(t.type)) +
+                  "</span>"
+                );
+              })
+              .join("") +
+            "</div>"
+          );
+        }
+
+        function packLanes(items) {
+          const lanes = [];
+          items.forEach(function (item) {
+            let lane = 0;
+            while (
+              lanes[lane] &&
+              lanes[lane].some(function (other) {
+                return !(
+                  item.endExclusive <= other.start ||
+                  item.start >= other.endExclusive
+                );
+              })
+            ) {
+              lane += 1;
+            }
+            if (!lanes[lane]) lanes[lane] = [];
+            lanes[lane].push(item);
+            item.lane = lane;
+          });
+          return lanes.length || 1;
+        }
+
+        function renderWeek() {
+          const start = MSAStaff.startOfWeek(anchor);
+          const days = [];
+          for (let i = 0; i < 7; i++) days.push(MSAStaff.addDays(start, i));
+          const dayIsos = days.map(function (d) {
+            return MSAStaff.formatDateISO(d);
+          });
+          const weekStart = dayIsos[0];
+          const weekEnd = dayIsos[6];
+          const props = filteredProperties();
+          const todayIso = MSAStaff.formatDateISO(new Date());
+
+          let html = '<div class="cal-week">';
+          html += '<div class="cal-week-header">';
+          html += '<div class="cal-head cal-head-prop">Property</div>';
+          days.forEach(function (day) {
+            const iso = MSAStaff.formatDateISO(day);
+            html +=
+              '<div class="cal-head' +
+              (iso === todayIso ? " is-today" : "") +
+              '">' +
+              day.toLocaleDateString("en-GB", { weekday: "short" }) +
+              "<br />" +
+              MSAStaff.formatDateDMY(day) +
+              "</div>";
+          });
+          html += "</div>";
+
+          if (!props.length) {
+            html += '<p class="muted">No properties match.</p>';
+          }
+
+          props.forEach(function (p) {
+            const propBlocks = blocks
+              .filter(function (b) {
+                return (
+                  b.propertyId === p.id &&
+                  b.startDate <= weekEnd &&
+                  b.endDate >= weekStart
+                );
+              })
+              .map(function (b) {
+                let startIdx = 0;
+                let endIdx = 6;
+                if (b.startDate >= weekStart) {
+                  startIdx = dayIsos.indexOf(b.startDate);
+                  if (startIdx < 0) startIdx = 0;
+                }
+                if (b.endDate <= weekEnd) {
+                  endIdx = dayIsos.indexOf(b.endDate);
+                  if (endIdx < 0) endIdx = 6;
+                }
+                return {
+                  block: b,
+                  start: startIdx,
+                  endExclusive: endIdx + 1,
+                };
+              })
+              .sort(function (a, b) {
+                return a.start - b.start || a.endExclusive - b.endExclusive;
+              });
+
+            const laneCount = packLanes(propBlocks);
+            const spansHeight = Math.max(laneCount, 1) * 36 + 10;
+
+            html += '<div class="cal-week-row">';
+            html +=
+              '<div class="cal-prop-label">' +
+              MSAStaff.escapeHtml(p.name) +
+              '<span class="muted">' +
+              MSAStaff.escapeHtml(p.city) +
+              "</span></div>";
+            html += '<div class="cal-week-track">';
+            html +=
+              '<div class="cal-week-spans" style="height:' +
+              spansHeight +
+              'px">';
+            propBlocks.forEach(function (item) {
+              const left = (item.start / 7) * 100;
+              const width = ((item.endExclusive - item.start) / 7) * 100;
+              const gap = 0.4;
+              html +=
+                '<button type="button" class="cal-span cal-span-' +
+                MSAStaff.escapeHtml(item.block.status) +
+                ' is-clickable" data-id="' +
+                item.block.id +
+                '" title="' +
+                MSAStaff.escapeHtml(blockTitle(item.block)) +
+                '" style="left:calc(' +
+                left +
+                "% + " +
+                gap +
+                "%);width:calc(" +
+                width +
+                "% - " +
+                gap * 2 +
+                "%);top:" +
+                (item.lane * 36 + 6) +
+                'px">' +
+                MSAStaff.escapeHtml(blockLabelText(item.block)) +
+                "</button>";
+            });
+            html += "</div>";
+            html += '<div class="cal-week-cells">';
+            dayIsos.forEach(function (iso) {
+              const dayBlocks = propBlocks
+                .map(function (item) {
+                  return item.block;
+                })
+                .filter(function (b) {
+                  return b.startDate <= iso && b.endDate >= iso;
+                });
+              html +=
+                '<div class="cal-cell cal-week-cell' +
+                (iso === todayIso ? " is-today" : "") +
+                '" data-date="' +
+                iso +
+                '" data-property="' +
+                MSAStaff.escapeHtml(p.id) +
+                '">' +
+                dayBlocks
+                  .map(function (b) {
+                    return dayTaskChipsHtml(b, iso);
+                  })
+                  .join("") +
+                "</div>";
+            });
+            html += "</div></div></div>";
+          });
+
+          html += "</div>";
+          root.innerHTML = html;
+        }
+
+        function segmentClass(block, iso, weekIsos) {
+          const idx = weekIsos.indexOf(iso);
+          const continuesLeft = block.startDate < iso && idx > 0;
+          const continuesRight = block.endDate > iso && idx < 6;
+          if (block.startDate === iso && block.endDate === iso) {
+            return "cal-seg cal-seg-single";
+          }
+          if (!continuesLeft && continuesRight) return "cal-seg cal-seg-start";
+          if (continuesLeft && !continuesRight) return "cal-seg cal-seg-end";
+          if (continuesLeft && continuesRight) return "cal-seg cal-seg-mid";
+          return "cal-seg cal-seg-single";
+        }
+
+        function renderMonth() {
+          const monthStart = MSAStaff.startOfMonth(anchor);
+          const gridStart = MSAStaff.startOfWeek(monthStart);
+          const todayIso = MSAStaff.formatDateISO(new Date());
+          const props = filteredProperties();
+          const propIds = new Set(
+            props.map(function (p) {
+              return p.id;
+            })
+          );
+
+          let html =
+            '<div class="cal-grid cal-grid--month cal-grid--month-connected">' +
+            ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+              .map(function (d) {
+                return '<div class="cal-head">' + d + "</div>";
+              })
+              .join("");
+
+          for (let week = 0; week < 6; week++) {
+            const weekIsos = [];
+            for (let d = 0; d < 7; d++) {
+              weekIsos.push(
+                MSAStaff.formatDateISO(
+                  MSAStaff.addDays(gridStart, week * 7 + d)
+                )
+              );
+            }
+            for (let d = 0; d < 7; d++) {
+              const day = MSAStaff.addDays(gridStart, week * 7 + d);
+              const iso = weekIsos[d];
+              const outside = day.getMonth() !== anchor.getMonth();
+              const dayBlocks = blocks
+                .filter(function (b) {
+                  return (
+                    propIds.has(b.propertyId) &&
+                    b.startDate <= iso &&
+                    b.endDate >= iso
+                  );
+                })
+                .slice(0, 4);
+              html +=
+                '<div class="cal-cell' +
+                (outside ? " is-outside" : "") +
+                (iso === todayIso ? " is-today" : "") +
+                '" data-date="' +
+                iso +
+                '"><div class="cal-day-num">' +
+                day.getDate() +
+                "</div>" +
+                dayBlocks
+                  .map(function (b) {
+                    const showLabel =
+                      b.startDate === iso || iso === weekIsos[0];
+                    const name =
+                      b.propertyName || blockLabelText(b);
+                    return (
+                      '<button type="button" class="' +
+                      segmentClass(b, iso, weekIsos) +
+                      " cal-span-" +
+                      MSAStaff.escapeHtml(b.status) +
+                      ' is-clickable" data-id="' +
+                      b.id +
+                      '" title="' +
+                      MSAStaff.escapeHtml(blockTitle(b, iso)) +
+                      '">' +
+                      (showLabel
+                        ? '<span class="cal-seg-label">' +
+                          MSAStaff.escapeHtml(name.slice(0, 20)) +
+                          "</span>"
+                        : "") +
+                      dayTaskChipsHtml(b, iso) +
+                      "</button>"
+                    );
+                  })
+                  .join("") +
+                "</div>";
+            }
+          }
+          html += "</div>";
+          root.innerHTML = html;
+        }
+
+
+
+        function render() {
+          updateRangeLabel();
+          if (view === "week") renderWeek();
+          else renderMonth();
+        }
+
+        async function loadBlocks() {
+          const bounds = rangeBounds();
+          const from = MSAStaff.formatDateISO(
+            view === "month"
+              ? MSAStaff.startOfWeek(bounds.start)
+              : bounds.start
+          );
+          const to = MSAStaff.formatDateISO(
+            view === "month"
+              ? MSAStaff.addDays(MSAStaff.startOfWeek(bounds.start), 41)
+              : bounds.end
+          );
+          MSAStaff.setStatus(status, "Loading…");
+          try {
+            const data = await MSAStaff.api(
+              "/api/staff/availability?from=" +
+                encodeURIComponent(from) +
+                "&to=" +
+                encodeURIComponent(to) +
+                (cityFilter.value
+                  ? "&city=" + encodeURIComponent(cityFilter.value)
+                  : "") +
+                (propertyFilter.value
+                  ? "&propertyId=" + encodeURIComponent(propertyFilter.value)
+                  : "")
+            );
+            blocks = data.blocks || [];
+            if (canEdit && data.staffUsers) staffUsers = data.staffUsers;
+            MSAStaff.setStatus(status, "");
+            render();
+          } catch (err) {
+            MSAStaff.setStatus(status, err.message, "err");
+          }
+        }
+
+        function syncReservationUi() {
+          if (!canEdit) return;
+          const type = document.getElementById("block-status").value;
+          const isBooked = type === "booked";
+          document.getElementById("guests-wrap").hidden = !isBooked;
+          document.getElementById("day-tasks-wrap").hidden = !isBooked;
+          document.getElementById("block-guests").required = isBooked;
+          if (isBooked) renderDayTasksEditor();
+        }
+
+        function assigneeOptionsHtml(selectedId) {
+          return (
+            '<option value="">Unassigned</option>' +
+            staffUsers
+              .map(function (u) {
+                return (
+                  '<option value="' +
+                  u.id +
+                  '"' +
+                  (Number(selectedId) === u.id ? " selected" : "") +
+                  ">" +
+                  MSAStaff.escapeHtml(u.name) +
+                  (u.role === "admin"
+                    ? " (admin)"
+                    : u.role === "manager"
+                      ? " (manager)"
+                      : "") +
+                  "</option>"
+                );
+              })
+              .join("")
+          );
+        }
+
+        function collectDraftFromDom() {
+          const wrap = document.getElementById("day-tasks");
+          if (!wrap) return draftTasks;
+          const next = [];
+          wrap.querySelectorAll(".day-task-item").forEach(function (item) {
+            const input = item.querySelector('input[type="checkbox"]');
+            if (!input) return;
+            const type = input.getAttribute("data-task-type");
+            const date = input.getAttribute("data-task-date");
+            const locked = type === "check";
+            if (!locked && !input.checked) return;
+            const select = item.querySelector("select[data-assignee]");
+            const assigneeId =
+              select && select.value ? Number(select.value) : null;
+            next.push({
+              date: date,
+              type: type,
+              completed: false,
+              assigneeId: assigneeId,
+            });
+          });
+          wrap.querySelectorAll(".day-task-row").forEach(function (row) {
+            const date = row.getAttribute("data-date");
+            if (
+              !next.some(function (t) {
+                return t.date === date && t.type === "check";
+              })
+            ) {
+              next.push({
+                date: date,
+                type: "check",
+                completed: false,
+                assigneeId: null,
+              });
+            }
+          });
+          draftTasks = next;
+          return draftTasks;
+        }
+
+        function renderDayTasksEditor() {
+          const wrap = document.getElementById("day-tasks");
+          const startDate = MSAStaff.toISODateString(
+            document.getElementById("block-start").value
+          );
+          const endDate = MSAStaff.toISODateString(
+            document.getElementById("block-end").value
+          );
+          if (!startDate || !endDate || endDate < startDate) {
+            wrap.innerHTML =
+              '<p class="muted">Enter valid start and end dates to set daily tasks.</p>';
+            return;
+          }
+          const dates = MSAStaff.eachDateInclusive(startDate, endDate);
+          const selected = {};
+          const assignees = {};
+          draftTasks.forEach(function (t) {
+            selected[t.date + "|" + t.type] = true;
+            assignees[t.date + "|" + t.type] = t.assigneeId || null;
+          });
+          dates.forEach(function (date) {
+            selected[date + "|check"] = true;
+          });
+
+          wrap.innerHTML = dates
+            .map(function (date, index) {
+              const isFirst = index === 0;
+              const isLast = index === dates.length - 1;
+              const kinds = dailyTaskTypes.slice();
+              if (isFirst) {
+                checkInTaskTypes.forEach(function (t) {
+                  if (kinds.indexOf(t) === -1) kinds.push(t);
+                });
+              }
+              if (isLast) {
+                checkOutTaskTypes.forEach(function (t) {
+                  if (kinds.indexOf(t) === -1) kinds.push(t);
+                });
+              }
+              const dayLabel =
+                MSAStaff.formatDateDMY(date) +
+                (isFirst && isLast
+                  ? " · check-in / check-out"
+                  : isFirst
+                    ? " · check-in"
+                    : isLast
+                      ? " · check-out"
+                      : "");
+              const checks = kinds
+                .map(function (type) {
+                  const key = date + "|" + type;
+                  const locked = type === "check";
+                  const on = selected[key] || locked;
+                  return (
+                    '<div class="day-task-item">' +
+                    '<label class="day-task-chip">' +
+                    '<input type="checkbox" data-task-date="' +
+                    date +
+                    '" data-task-type="' +
+                    type +
+                    '"' +
+                    (on ? " checked" : "") +
+                    (locked ? " disabled" : "") +
+                    " /> " +
+                    MSAStaff.escapeHtml(taskLabel(type)) +
+                    "</label>" +
+                    '<select data-assignee class="day-task-assignee"' +
+                    (on ? "" : " disabled") +
+                    ">" +
+                    assigneeOptionsHtml(assignees[key]) +
+                    "</select></div>"
+                  );
+                })
+                .join("");
+              return (
+                '<div class="day-task-row" data-date="' +
+                date +
+                '"><div class="day-task-date">' +
+                MSAStaff.escapeHtml(dayLabel) +
+                '</div><div class="day-task-chips day-task-assign-grid">' +
+                checks +
+                "</div></div>"
+              );
+            })
+            .join("");
+        }
+
+        function openViewer(block) {
+          viewer.hidden = false;
+          if (canEdit && editor) editor.hidden = true;
+          const guests =
+            block.status === "booked"
+              ? block.guestCount != null
+                ? block.guestCount + " guests"
+                : "Guests not set"
+              : "";
+          const dates = MSAStaff.eachDateInclusive(
+            block.startDate,
+            block.endDate
+          );
+          const daysHtml = dates
+            .map(function (date, index) {
+              const tasks = tasksForDay(block, date);
+              const tag =
+                (index === 0 ? " check-in" : "") +
+                (index === dates.length - 1 ? " check-out" : "");
+              return (
+                '<div class="day-task-row"><div class="day-task-date">' +
+                MSAStaff.escapeHtml(MSAStaff.formatDateDMY(date) + tag) +
+                '</div><div class="day-task-chips">' +
+                (tasks.length
+                  ? tasks
+                      .map(function (t) {
+                        return (
+                          '<span class="task-pill task-pill-' +
+                          MSAStaff.escapeHtml(t.type) +
+                          '">' +
+                          MSAStaff.escapeHtml(taskLabel(t.type)) +
+                          (t.assigneeName
+                            ? " · " + MSAStaff.escapeHtml(t.assigneeName)
+                            : "") +
+                          "</span>"
+                        );
+                      })
+                      .join("")
+                  : '<span class="muted">No tasks</span>') +
+                "</div></div>"
+              );
+            })
+            .join("");
+
+          document.getElementById("viewer-title").textContent =
+            (block.statusLabel || statusLabel(block.status)) +
+            (block.propertyName ? " · " + block.propertyName : "");
+          document.getElementById("viewer-body").innerHTML =
+            '<p><strong>' +
+            MSAStaff.escapeHtml(MSAStaff.formatDateDMY(block.startDate)) +
+            " → " +
+            MSAStaff.escapeHtml(MSAStaff.formatDateDMY(block.endDate)) +
+            "</strong>" +
+            (guests
+              ? ' · <span class="guest-count">' +
+                MSAStaff.escapeHtml(guests) +
+                "</span>"
+              : "") +
+            "</p>" +
+            (block.note
+              ? "<p class=\"muted\">" +
+                MSAStaff.escapeHtml(block.note) +
+                "</p>"
+              : "") +
+            (block.status === "booked"
+              ? '<div class="day-tasks">' + daysHtml + "</div>"
+              : "");
+          viewer.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+
+        function closeViewer() {
+          viewer.hidden = true;
+        }
+
+        function openEditor(block) {
+          if (!canEdit) {
+            if (block && block.id) openViewer(block);
+            return;
+          }
+          closeViewer();
+          editor.hidden = false;
+          const editing = !!(block && block.id);
+          document.getElementById("editor-title").textContent = editing
+            ? "Edit reservation"
+            : "Add reservation";
+          document.getElementById("block-id").value = editing ? block.id : "";
+          document.getElementById("block-property").value =
+            (block && block.propertyId) ||
+            (properties[0] && properties[0].id) ||
+            "";
+          document.getElementById("block-start").value = MSAStaff.formatDateDMY(
+            (block && block.startDate) || MSAStaff.formatDateISO(anchor)
+          );
+          document.getElementById("block-end").value = MSAStaff.formatDateDMY(
+            (block && block.endDate) || MSAStaff.formatDateISO(anchor)
+          );
+          document.getElementById("block-status").value =
+            (block && block.status) || "booked";
+          document.getElementById("block-guests").value =
+            block && block.guestCount != null ? block.guestCount : "";
+          document.getElementById("block-note").value =
+            (block && block.note) || "";
+          document.getElementById("delete-block").hidden = !editing;
+          draftTasks = (block && block.tasks ? block.tasks : []).map(function (
+            t
+          ) {
+            return {
+              date: t.date,
+              type: t.type,
+              completed: !!t.completed,
+              assigneeId: t.assigneeId || null,
+            };
+          });
+          syncReservationUi();
+          editor.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+
+        function closeEditor() {
+          if (!canEdit) return;
+          editor.hidden = true;
+          document.getElementById("block-form").reset();
+          document.getElementById("block-id").value = "";
+          document.getElementById("delete-block").hidden = true;
+          draftTasks = [];
+        }
+
+        document.querySelectorAll("[data-view]").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            view = btn.getAttribute("data-view");
+            document.querySelectorAll("[data-view]").forEach(function (b) {
+              b.classList.toggle("is-active", b === btn);
+            });
+            loadBlocks();
+          });
+        });
+
+        document.getElementById("prev-range").addEventListener("click", function () {
+          if (view === "week") anchor = MSAStaff.addDays(anchor, -7);
+          else anchor = new Date(anchor.getFullYear(), anchor.getMonth() - 1, 1);
+          loadBlocks();
+        });
+        document.getElementById("next-range").addEventListener("click", function () {
+          if (view === "week") anchor = MSAStaff.addDays(anchor, 7);
+          else anchor = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1);
+          loadBlocks();
+        });
+        document.getElementById("today-btn").addEventListener("click", function () {
+          anchor = new Date();
+          loadBlocks();
+        });
+        cityFilter.addEventListener("change", function () {
+          refreshPropertyFilter();
+          loadBlocks();
+        });
+        propertyFilter.addEventListener("change", loadBlocks);
+        document
+          .getElementById("close-viewer")
+          .addEventListener("click", closeViewer);
+
+        root.addEventListener("click", function (event) {
+          const btn = event.target.closest(".cal-span, .cal-seg, .cal-block");
+          if (btn) {
+            const id = Number(btn.getAttribute("data-id"));
+            const block = blocks.find(function (b) {
+              return b.id === id;
+            });
+            if (!block) return;
+            if (canEdit) openEditor(block);
+            else openViewer(block);
+            return;
+          }
+          if (!canEdit) return;
+          const cell = event.target.closest(".cal-cell[data-date]");
+          if (!cell) return;
+          const date = cell.getAttribute("data-date");
+          const propertyId = cell.getAttribute("data-property");
+          openEditor({
+            id: "",
+            propertyId: propertyId || (properties[0] && properties[0].id) || "",
+            startDate: date,
+            endDate: date,
+            status: "booked",
+            guestCount: "",
+            note: "",
+            tasks: [],
+          });
+        });
+
+        if (canEdit) {
+          document
+            .getElementById("block-status")
+            .addEventListener("change", syncReservationUi);
+          ["block-start", "block-end"].forEach(function (id) {
+            document.getElementById(id).addEventListener("change", function () {
+              collectDraftFromDom();
+              syncReservationUi();
+            });
+            document.getElementById(id).addEventListener("blur", function () {
+              collectDraftFromDom();
+              syncReservationUi();
+            });
+          });
+          document
+            .getElementById("day-tasks")
+            .addEventListener("change", function (event) {
+              const input = event.target.closest('input[type="checkbox"]');
+              if (input) {
+                const item = input.closest(".day-task-item");
+                const select = item && item.querySelector("select[data-assignee]");
+                if (select) {
+                  select.disabled =
+                    input.getAttribute("data-task-type") !== "check" &&
+                    !input.checked;
+                }
+              }
+              collectDraftFromDom();
+            });
+
+          document
+            .getElementById("add-block")
+            .addEventListener("click", function () {
+              openEditor(null);
+            });
+          document
+            .getElementById("cancel-edit")
+            .addEventListener("click", closeEditor);
+          document
+            .getElementById("block-form")
+            .addEventListener("submit", async function (event) {
+              event.preventDefault();
+              const id = document.getElementById("block-id").value;
+              const startDate = MSAStaff.toISODateString(
+                document.getElementById("block-start").value
+              );
+              const endDate = MSAStaff.toISODateString(
+                document.getElementById("block-end").value
+              );
+              if (!startDate || !endDate) {
+                MSAStaff.setStatus(status, "Use dates as DD/MM/YYYY.", "err");
+                return;
+              }
+              const blockStatus = document.getElementById("block-status").value;
+              const guestsRaw = document.getElementById("block-guests").value;
+              const payload = {
+                propertyId: document.getElementById("block-property").value,
+                startDate: startDate,
+                endDate: endDate,
+                status: blockStatus,
+                note: document.getElementById("block-note").value,
+                guestCount:
+                  blockStatus === "booked"
+                    ? guestsRaw === ""
+                      ? null
+                      : Number(guestsRaw)
+                    : null,
+                tasks:
+                  blockStatus === "booked" ? collectDraftFromDom() : [],
+              };
+              MSAStaff.setStatus(status, "Saving…");
+              try {
+                if (id) {
+                  await MSAStaff.api("/api/staff/availability/" + id, {
+                    method: "PUT",
+                    body: JSON.stringify(payload),
+                  });
+                } else {
+                  await MSAStaff.api("/api/staff/availability", {
+                    method: "POST",
+                    body: JSON.stringify(payload),
+                  });
+                }
+                closeEditor();
+                MSAStaff.setStatus(status, "Saved.", "ok");
+                await loadBlocks();
+              } catch (err) {
+                MSAStaff.setStatus(status, err.message, "err");
+              }
+            });
+          document
+            .getElementById("delete-block")
+            .addEventListener("click", async function () {
+              const id = document.getElementById("block-id").value;
+              if (!id) return;
+              if (!window.confirm("Delete this reservation?")) return;
+              try {
+                await MSAStaff.api("/api/staff/availability/" + id, {
+                  method: "DELETE",
+                });
+                closeEditor();
+                MSAStaff.setStatus(status, "Deleted.", "ok");
+                await loadBlocks();
+              } catch (err) {
+                MSAStaff.setStatus(status, err.message, "err");
+              }
+            });
+        }
+
+        try {
+          const propsData = await MSAStaff.api("/api/properties");
+          properties = propsData.properties || [];
+          fillCityFilter();
+          await loadBlocks();
+        } catch (err) {
+          MSAStaff.setStatus(status, err.message, "err");
+        }
+      })();
+    </script>
+  </body>
+</html>

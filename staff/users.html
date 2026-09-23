@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Staff users · MSA Stay</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/staff.css" />
+    <link rel="icon" href="../assets/favicon.ico" sizes="any" />
+    <meta name="theme-color" content="#3C6169" />
+  </head>
+  <body>
+    <header class="staff-header">
+      <a class="staff-brand" href="calendar.html"
+        ><img
+          class="staff-logo"
+          src="../assets/logo.png"
+          alt="MSA Stay"
+          width="160"
+          height="36"
+        /><span class="staff-brand-label">Staff</span></a
+      >
+      <nav class="staff-nav"></nav>
+    </header>
+
+    <main class="staff-main">
+      <h1>Users</h1>
+      <p class="muted" id="role-hint">
+        Managers edit the calendar and promote staff. Admins can also deactivate
+        accounts and reset passwords. There must always be at least one admin.
+      </p>
+      <p class="status" id="status"></p>
+
+      <section class="panel">
+        <div class="table-wrap">
+          <table class="users-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="user-rows">
+              <tr>
+                <td colspan="5" class="muted">Loading…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script src="js/staff-common.js"></script>
+    <script>
+      (async function () {
+        const status = document.getElementById("status");
+        const body = document.getElementById("user-rows");
+
+        const me = await MSAStaff.requireAuth({ redirect: "users.html" });
+        if (!me) return;
+
+        if (!MSAStaff.canEditOps(me.user)) {
+          MSAStaff.fillHeader(me.user);
+          body.innerHTML =
+            '<tr><td colspan="5" class="muted">Managers and admins only.</td></tr>';
+          MSAStaff.setStatus(
+            status,
+            "Only managers and admins can manage users.",
+            "err"
+          );
+          return;
+        }
+
+        MSAStaff.fillHeader(me.user);
+        const iAmAdmin = MSAStaff.isAdmin(me.user);
+        let managerCount = 0;
+        let adminCount = 0;
+
+        function roleOptions(selected) {
+          const roles = iAmAdmin
+            ? ["admin", "manager", "staff"]
+            : ["manager", "staff"];
+          return roles
+            .map(function (role) {
+              return (
+                '<option value="' +
+                role +
+                '"' +
+                (role === selected ? " selected" : "") +
+                ">" +
+                role +
+                "</option>"
+              );
+            })
+            .join("");
+        }
+
+        function render(users) {
+          if (!users.length) {
+            body.innerHTML =
+              '<tr><td colspan="5" class="muted">No users yet.</td></tr>';
+            return;
+          }
+          body.innerHTML = users
+            .map(function (u) {
+              const isSelf = u.id === me.user.id;
+              const canChangeRole =
+                u.active &&
+                (iAmAdmin || (u.role !== "admin" && me.user.role !== "staff"));
+              let actions = "";
+
+              if (canChangeRole) {
+                if (iAmAdmin) {
+                  actions +=
+                    '<select class="role-select" data-role-select data-id="' +
+                    u.id +
+                    '">' +
+                    roleOptions(u.role) +
+                    "</select>";
+                } else if (u.role === "manager") {
+                  actions =
+                    managerCount > 1 || adminCount > 0
+                      ? '<button type="button" class="btn" data-role="staff" data-id="' +
+                        u.id +
+                        '">Make staff</button>'
+                      : '<span class="muted">Last manager</span>';
+                } else if (u.role === "staff") {
+                  actions =
+                    '<button type="button" class="btn btn-primary" data-role="manager" data-id="' +
+                    u.id +
+                    '">Make manager</button>';
+                }
+              } else if (!iAmAdmin && u.role === "admin") {
+                actions = '<span class="muted">Admin</span>';
+              }
+
+              if (iAmAdmin) {
+                if (!isSelf) {
+                  actions +=
+                    '<button type="button" class="btn" data-active="' +
+                    (u.active ? "0" : "1") +
+                    '" data-id="' +
+                    u.id +
+                    '">' +
+                    (u.active ? "Deactivate" : "Reactivate") +
+                    "</button>";
+                }
+                if (u.active) {
+                  actions +=
+                    '<button type="button" class="btn" data-password data-id="' +
+                    u.id +
+                    '">Reset password</button>';
+                }
+              }
+
+              return (
+                '<tr class="' +
+                (u.active ? "" : "is-inactive") +
+                '">' +
+                "<td><strong>" +
+                MSAStaff.escapeHtml(u.name) +
+                "</strong>" +
+                (isSelf ? ' <span class="muted">(you)</span>' : "") +
+                "</td>" +
+                "<td>" +
+                MSAStaff.escapeHtml(u.email) +
+                "</td>" +
+                '<td><span class="role-pill ' +
+                MSAStaff.escapeHtml(u.role) +
+                '">' +
+                MSAStaff.escapeHtml(u.role) +
+                "</span></td>" +
+                "<td>" +
+                (u.active ? "Active" : "Inactive") +
+                "</td>" +
+                '<td><div class="user-actions">' +
+                actions +
+                "</div></td>" +
+                "</tr>"
+              );
+            })
+            .join("");
+        }
+
+        async function load() {
+          MSAStaff.setStatus(status, "Loading…");
+          try {
+            const data = await MSAStaff.api("/api/staff/users");
+            managerCount = data.managerCount || 0;
+            adminCount = data.adminCount || 0;
+            render(data.users || []);
+            MSAStaff.setStatus(status, "");
+          } catch (err) {
+            body.innerHTML =
+              '<tr><td colspan="5" class="muted">Could not load users.</td></tr>';
+            MSAStaff.setStatus(status, err.message, "err");
+          }
+        }
+
+        async function setRole(id, role) {
+          const data = await MSAStaff.api("/api/staff/users/" + id + "/role", {
+            method: "PUT",
+            body: JSON.stringify({ role: role }),
+          });
+          managerCount = data.managerCount || managerCount;
+          adminCount = data.adminCount || adminCount;
+          if (id === me.user.id && role === "staff") {
+            MSAStaff.setStatus(
+              status,
+              "Your role is now staff. Redirecting…",
+              "ok"
+            );
+            setTimeout(function () {
+              location.href = "calendar.html";
+            }, 700);
+            return true;
+          }
+          if (id === me.user.id && role === "manager" && me.user.role === "admin") {
+            me.user.role = "manager";
+            MSAStaff.fillHeader(me.user);
+          }
+          return false;
+        }
+
+        body.addEventListener("change", async function (event) {
+          const select = event.target.closest("select[data-role-select]");
+          if (!select) return;
+          const id = Number(select.getAttribute("data-id"));
+          const role = select.value;
+          if (!window.confirm("Change this user to " + role + "?")) {
+            await load();
+            return;
+          }
+          select.disabled = true;
+          MSAStaff.setStatus(status, "Updating…");
+          try {
+            const redirected = await setRole(id, role);
+            if (redirected) return;
+            MSAStaff.setStatus(status, "Role updated.", "ok");
+            await load();
+          } catch (err) {
+            MSAStaff.setStatus(status, err.message, "err");
+            await load();
+          }
+        });
+
+        body.addEventListener("click", async function (event) {
+          const btn = event.target.closest("button[data-role], button[data-active], button[data-password]");
+          if (!btn) return;
+          const id = Number(btn.getAttribute("data-id"));
+
+          if (btn.hasAttribute("data-password")) {
+            const password = window.prompt(
+              "New password (at least 8 characters):"
+            );
+            if (password == null) return;
+            btn.disabled = true;
+            MSAStaff.setStatus(status, "Updating…");
+            try {
+              await MSAStaff.api("/api/staff/users/" + id + "/password", {
+                method: "PUT",
+                body: JSON.stringify({ password: password }),
+              });
+              MSAStaff.setStatus(
+                status,
+                "Password reset. They will need to sign in again.",
+                "ok"
+              );
+            } catch (err) {
+              MSAStaff.setStatus(status, err.message, "err");
+            }
+            btn.disabled = false;
+            return;
+          }
+
+          if (btn.hasAttribute("data-active")) {
+            const active = btn.getAttribute("data-active") === "1";
+            const label = active
+              ? "Reactivate this user?"
+              : "Deactivate this user? They will be signed out.";
+            if (!window.confirm(label)) return;
+            btn.disabled = true;
+            MSAStaff.setStatus(status, "Updating…");
+            try {
+              await MSAStaff.api("/api/staff/users/" + id + "/active", {
+                method: "PUT",
+                body: JSON.stringify({ active: active }),
+              });
+              MSAStaff.setStatus(
+                status,
+                active ? "User reactivated." : "User deactivated.",
+                "ok"
+              );
+              await load();
+            } catch (err) {
+              MSAStaff.setStatus(status, err.message, "err");
+              btn.disabled = false;
+            }
+            return;
+          }
+
+          const role = btn.getAttribute("data-role");
+          const label =
+            role === "manager"
+              ? "Make this user a manager?"
+              : "Remove manager role?";
+          if (!window.confirm(label)) return;
+          btn.disabled = true;
+          MSAStaff.setStatus(status, "Updating…");
+          try {
+            const redirected = await setRole(id, role);
+            if (redirected) return;
+            MSAStaff.setStatus(status, "Role updated.", "ok");
+            await load();
+          } catch (err) {
+            MSAStaff.setStatus(status, err.message, "err");
+            btn.disabled = false;
+          }
+        });
+
+        await load();
+      })();
+    </script>
+  </body>
+</html>

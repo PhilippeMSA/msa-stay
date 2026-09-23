@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin — Bulk assign · MSA Stay</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/admin.css" />
+    <link rel="icon" href="../assets/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32x32.png" />
+    <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png" />
+    <meta name="theme-color" content="#3C6169" />
+  </head>
+  <body>
+    <header class="admin-header">
+      <a class="admin-brand" href="index.html"
+        ><img
+          class="admin-logo"
+          src="../assets/logo.png"
+          alt="MSA Stay"
+          width="160"
+          height="36"
+        /><span class="admin-brand-label">Admin</span></a
+      >
+      <nav class="admin-nav"></nav>
+    </header>
+
+    <main class="admin-main admin-main--wide">
+      <div class="admin-toolbar">
+        <div>
+          <h1>Bulk assign</h1>
+          <p class="muted">
+            Select properties, then add or remove amenities, services, and paid
+            services in one step. Existing items on each property are kept when
+            adding.
+          </p>
+        </div>
+      </div>
+
+      <p class="status" id="status"></p>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>1. Properties</h2>
+          <div class="bulk-toolbar">
+            <select id="city-filter">
+              <option value="">All cities</option>
+            </select>
+            <input type="search" id="property-filter" placeholder="Filter properties…" />
+            <button type="button" class="btn" id="select-visible">Select visible</button>
+            <button type="button" class="btn" id="clear-properties">Clear</button>
+          </div>
+        </div>
+        <p class="muted" id="property-summary">0 selected</p>
+        <div class="bulk-property-list" id="property-list">
+          <p class="muted">Loading…</p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>2. What to change</h2>
+          <div class="bulk-mode" role="group" aria-label="Assign mode">
+            <label
+              ><input type="radio" name="mode" value="add" checked /> Add to
+              selected</label
+            >
+            <label
+              ><input type="radio" name="mode" value="remove" /> Remove from
+              selected</label
+            >
+          </div>
+        </div>
+
+        <div class="bulk-catalog-grid">
+          <div>
+            <h3 class="bulk-section-title">Amenities</h3>
+            <div id="amenity-picker"></div>
+          </div>
+          <div>
+            <h3 class="bulk-section-title">Services</h3>
+            <div id="service-picker"></div>
+          </div>
+          <div>
+            <h3 class="bulk-section-title">Paid services</h3>
+            <div id="paid-picker"></div>
+          </div>
+        </div>
+      </section>
+
+      <div class="actions bulk-actions">
+        <button type="button" class="btn btn-primary" id="apply-btn">
+          Apply to selected properties
+        </button>
+      </div>
+    </main>
+
+    <script src="js/admin-common.js"></script>
+    <script>
+      (async function () {
+        MSAAdmin.fillAdminNav("bulk-assign.html");
+        const status = document.getElementById("status");
+        const listEl = document.getElementById("property-list");
+        const summaryEl = document.getElementById("property-summary");
+        const cityFilter = document.getElementById("city-filter");
+        const propertyFilter = document.getElementById("property-filter");
+        const selectedIds = new Set();
+        let properties = [];
+        let amenityPicker;
+        let servicePicker;
+        let paidPicker;
+
+        function escapeHtml(value) {
+          return MSAAdmin.escapeHtml(value);
+        }
+
+        function selectedMode() {
+          const checked = document.querySelector('input[name="mode"]:checked');
+          return checked ? checked.value : "add";
+        }
+
+        function visibleProperties() {
+          const city = cityFilter.value;
+          const q = propertyFilter.value.trim().toLowerCase();
+          return properties.filter(function (p) {
+            if (city && p.citySlug !== city && p.city !== city) return false;
+            if (!q) return true;
+            return (
+              String(p.name || "")
+                .toLowerCase()
+                .indexOf(q) !== -1 ||
+              String(p.street || "")
+                .toLowerCase()
+                .indexOf(q) !== -1 ||
+              String(p.city || "")
+                .toLowerCase()
+                .indexOf(q) !== -1
+            );
+          });
+        }
+
+        function updateSummary() {
+          summaryEl.textContent =
+            selectedIds.size +
+            " selected" +
+            (selectedIds.size
+              ? " · " + visibleProperties().length + " visible"
+              : "");
+        }
+
+        function renderProperties() {
+          const rows = visibleProperties();
+          if (!rows.length) {
+            listEl.innerHTML = '<p class="muted">No properties match.</p>';
+            updateSummary();
+            return;
+          }
+          listEl.innerHTML = rows
+            .map(function (p) {
+              return (
+                '<label class="bulk-property-item">' +
+                '<input type="checkbox" value="' +
+                escapeHtml(p.id) +
+                '"' +
+                (selectedIds.has(p.id) ? " checked" : "") +
+                " />" +
+                '<span class="bulk-property-copy">' +
+                "<strong>" +
+                escapeHtml(p.name) +
+                "</strong>" +
+                '<span class="muted">' +
+                escapeHtml(p.city) +
+                (p.street ? " · " + escapeHtml(p.street) : "") +
+                "</span></span></label>"
+              );
+            })
+            .join("");
+          updateSummary();
+        }
+
+        listEl.addEventListener("change", function (event) {
+          const input = event.target.closest('input[type="checkbox"]');
+          if (!input) return;
+          if (input.checked) selectedIds.add(input.value);
+          else selectedIds.delete(input.value);
+          updateSummary();
+        });
+
+        cityFilter.addEventListener("change", renderProperties);
+        propertyFilter.addEventListener("input", renderProperties);
+
+        document
+          .getElementById("select-visible")
+          .addEventListener("click", function () {
+            visibleProperties().forEach(function (p) {
+              selectedIds.add(p.id);
+            });
+            renderProperties();
+          });
+
+        document
+          .getElementById("clear-properties")
+          .addEventListener("click", function () {
+            selectedIds.clear();
+            renderProperties();
+          });
+
+        document
+          .getElementById("apply-btn")
+          .addEventListener("click", async function () {
+            const propertyIds = Array.from(selectedIds);
+            const amenityIds = amenityPicker
+              ? amenityPicker.getSelectedIds()
+              : [];
+            const serviceIds = servicePicker
+              ? servicePicker.getSelectedIds()
+              : [];
+            const paidServiceIds = paidPicker
+              ? paidPicker.getSelectedIds()
+              : [];
+            const mode = selectedMode();
+
+            if (!propertyIds.length) {
+              MSAAdmin.setStatus(
+                status,
+                "Select at least one property.",
+                "err"
+              );
+              return;
+            }
+            if (
+              !amenityIds.length &&
+              !serviceIds.length &&
+              !paidServiceIds.length
+            ) {
+              MSAAdmin.setStatus(
+                status,
+                "Select at least one amenity, service, or paid service.",
+                "err"
+              );
+              return;
+            }
+
+            const verb = mode === "remove" ? "Remove" : "Add";
+            const parts = [];
+            if (amenityIds.length) parts.push(amenityIds.length + " amenities");
+            if (serviceIds.length) parts.push(serviceIds.length + " services");
+            if (paidServiceIds.length)
+              parts.push(paidServiceIds.length + " paid services");
+            const ok = window.confirm(
+              verb +
+                " " +
+                parts.join(", ") +
+                " " +
+                (mode === "remove" ? "from" : "to") +
+                " " +
+                propertyIds.length +
+                " propert" +
+                (propertyIds.length === 1 ? "y" : "ies") +
+                "?"
+            );
+            if (!ok) return;
+
+            MSAAdmin.setStatus(status, "Applying…");
+            try {
+              const result = await MSAAdmin.api("/api/properties/bulk-assign", {
+                method: "POST",
+                body: JSON.stringify({
+                  propertyIds: propertyIds,
+                  amenityIds: amenityIds,
+                  serviceIds: serviceIds,
+                  paidServiceIds: paidServiceIds,
+                  mode: mode,
+                }),
+              });
+              MSAAdmin.setStatus(
+                status,
+                (mode === "remove" ? "Removed" : "Added") +
+                  " across " +
+                  result.propertyCount +
+                  " propert" +
+                  (result.propertyCount === 1 ? "y" : "ies") +
+                  " (" +
+                  result.linksTouched +
+                  " link" +
+                  (result.linksTouched === 1 ? "" : "s") +
+                  " changed).",
+                "ok"
+              );
+            } catch (err) {
+              MSAAdmin.setStatus(status, err.message, "err");
+            }
+          });
+
+        try {
+          const [propsData, amenitiesData, servicesData, paidData, citiesData] =
+            await Promise.all([
+              MSAAdmin.api("/api/properties"),
+              MSAAdmin.api("/api/amenities"),
+              MSAAdmin.api("/api/services"),
+              MSAAdmin.api("/api/paid-services"),
+              MSAAdmin.api("/api/cities"),
+            ]);
+
+          properties = propsData.properties || [];
+          const cities = citiesData.cities || [];
+          cityFilter.innerHTML =
+            '<option value="">All cities</option>' +
+            cities
+              .map(function (c) {
+                return (
+                  '<option value="' +
+                  escapeHtml(c.slug) +
+                  '">' +
+                  escapeHtml(c.name) +
+                  "</option>"
+                );
+              })
+              .join("");
+
+          amenityPicker = MSAAdmin.createCatalogPicker(
+            document.getElementById("amenity-picker"),
+            {
+              items: amenitiesData.amenities || [],
+              categories: amenitiesData.categories || [],
+              emptyLabel: "No amenities selected.",
+            }
+          );
+          servicePicker = MSAAdmin.createCatalogPicker(
+            document.getElementById("service-picker"),
+            {
+              items: servicesData.services || [],
+              categories: servicesData.categories || [],
+              emptyLabel: "No services selected.",
+            }
+          );
+          paidPicker = MSAAdmin.createCatalogPicker(
+            document.getElementById("paid-picker"),
+            {
+              items: paidData.paidServices || [],
+              categories: paidData.categories || [],
+              emptyLabel: "No paid services selected.",
+              getMeta: function (item) {
+                return MSAAdmin.formatPrice(
+                  item.price,
+                  item.currency,
+                  item.pricingType
+                );
+              },
+            }
+          );
+
+          renderProperties();
+        } catch (err) {
+          listEl.innerHTML =
+            '<p class="muted">Could not load properties or catalogs.</p>';
+          MSAAdmin.setStatus(status, err.message, "err");
+        }
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My schedule · MSA Stay</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/staff.css" />
+    <link rel="icon" href="../assets/favicon.ico" sizes="any" />
+    <meta name="theme-color" content="#3C6169" />
+  </head>
+  <body>
+    <header class="staff-header">
+      <a class="staff-brand" href="calendar.html"
+        ><img
+          class="staff-logo"
+          src="../assets/logo.png"
+          alt="MSA Stay"
+          width="160"
+          height="36"
+        /><span class="staff-brand-label">Staff</span></a
+      >
+      <nav class="staff-nav"></nav>
+    </header>
+
+    <main class="staff-main">
+      <div class="toolbar">
+        <div>
+          <h1>My schedule</h1>
+          <p class="muted">
+            Tasks assigned to you for today and the coming days.
+          </p>
+        </div>
+        <div class="toolbar-group">
+          <label class="muted" style="font-weight: 600">
+            Days ahead
+            <select id="days-ahead">
+              <option value="7">7 days</option>
+              <option value="14" selected>14 days</option>
+              <option value="21">21 days</option>
+              <option value="30">30 days</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <p class="status" id="status"></p>
+      <p class="muted" id="range-label"></p>
+      <div id="schedule-root">
+        <p class="muted">Loading…</p>
+      </div>
+    </main>
+
+    <script src="js/staff-common.js"></script>
+    <script>
+      (async function () {
+        const status = document.getElementById("status");
+        const root = document.getElementById("schedule-root");
+        const rangeLabel = document.getElementById("range-label");
+        const daysAhead = document.getElementById("days-ahead");
+
+        const me = await MSAStaff.requireAuth({ redirect: "schedule.html" });
+        if (!me) return;
+        MSAStaff.fillHeader(me.user);
+
+        const dayTaskLabels = me.dayTaskLabels || {};
+
+        function taskLabel(type) {
+          return dayTaskLabels[type] || String(type || "").replace(/_/g, " ");
+        }
+
+        function endIso(fromIso, days) {
+          const d = MSAStaff.parseISODate(fromIso);
+          return MSAStaff.formatDateISO(MSAStaff.addDays(d, Number(days)));
+        }
+
+        function groupByDate(tasks) {
+          const map = {};
+          tasks.forEach(function (t) {
+            if (!map[t.date]) map[t.date] = [];
+            map[t.date].push(t);
+          });
+          return map;
+        }
+
+        function render(tasks, from, to) {
+          rangeLabel.textContent =
+            MSAStaff.formatDateDMY(from) +
+            " → " +
+            MSAStaff.formatDateDMY(to) +
+            " · " +
+            tasks.length +
+            " task" +
+            (tasks.length === 1 ? "" : "s");
+
+          if (!tasks.length) {
+            root.innerHTML =
+              '<section class="panel"><p class="muted">No tasks assigned to you in this period.</p></section>';
+            return;
+          }
+
+          const today = MSAStaff.formatDateISO(new Date());
+          const byDate = groupByDate(tasks);
+          const dates = Object.keys(byDate).sort();
+
+          root.innerHTML = dates
+            .map(function (date) {
+              const label =
+                MSAStaff.formatDateDMY(date) +
+                (date === today ? " · today" : "");
+              const cards = byDate[date]
+                .map(function (t) {
+                  return (
+                    '<div class="schedule-card' +
+                    (t.completed ? " is-done" : "") +
+                    '">' +
+                    '<div class="schedule-card-main">' +
+                    '<span class="task-pill task-pill-' +
+                    MSAStaff.escapeHtml(t.type) +
+                    '">' +
+                    MSAStaff.escapeHtml(taskLabel(t.type)) +
+                    "</span>" +
+                    "<strong>" +
+                    MSAStaff.escapeHtml(t.propertyName || t.propertyId) +
+                    "</strong>" +
+                    '<span class="muted">' +
+                    MSAStaff.escapeHtml(t.city || "") +
+                    (t.guestCount != null
+                      ? " · " + t.guestCount + " guests"
+                      : "") +
+                    "</span>" +
+                    (t.reservationNote
+                      ? '<div class="muted">' +
+                        MSAStaff.escapeHtml(t.reservationNote) +
+                        "</div>"
+                      : "") +
+                    '<div class="muted">Stay ' +
+                    MSAStaff.escapeHtml(
+                      MSAStaff.formatDateDMY(t.reservationStart)
+                    ) +
+                    " → " +
+                    MSAStaff.escapeHtml(
+                      MSAStaff.formatDateDMY(t.reservationEnd)
+                    ) +
+                    "</div></div>" +
+                    '<label class="schedule-done">' +
+                    '<input type="checkbox" data-task-id="' +
+                    t.id +
+                    '"' +
+                    (t.completed ? " checked" : "") +
+                    " /> Done</label></div>"
+                  );
+                })
+                .join("");
+              return (
+                '<section class="panel schedule-day"><h2>' +
+                MSAStaff.escapeHtml(label) +
+                "</h2>" +
+                cards +
+                "</section>"
+              );
+            })
+            .join("");
+        }
+
+        async function load() {
+          const from = MSAStaff.formatDateISO(new Date());
+          const to = endIso(from, daysAhead.value);
+          MSAStaff.setStatus(status, "Loading…");
+          try {
+            const data = await MSAStaff.api(
+              "/api/staff/my-schedule?from=" +
+                encodeURIComponent(from) +
+                "&to=" +
+                encodeURIComponent(to)
+            );
+            MSAStaff.setStatus(status, "");
+            render(data.tasks || [], from, to);
+          } catch (err) {
+            root.innerHTML =
+              '<section class="panel"><p class="muted">Could not load schedule.</p></section>';
+            MSAStaff.setStatus(status, err.message, "err");
+          }
+        }
+
+        daysAhead.addEventListener("change", load);
+        root.addEventListener("change", async function (event) {
+          const input = event.target.closest('input[data-task-id]');
+          if (!input) return;
+          const id = input.getAttribute("data-task-id");
+          input.disabled = true;
+          try {
+            await MSAStaff.api("/api/staff/tasks/" + id + "/complete", {
+              method: "PUT",
+              body: JSON.stringify({ completed: !!input.checked }),
+            });
+            const card = input.closest(".schedule-card");
+            if (card) card.classList.toggle("is-done", input.checked);
+            MSAStaff.setStatus(status, "Updated.", "ok");
+          } catch (err) {
+            input.checked = !input.checked;
+            MSAStaff.setStatus(status, err.message, "err");
+          } finally {
+            input.disabled = false;
+          }
+        });
+
+        await load();
+      })();
+    </script>
+  </body>
+</html>

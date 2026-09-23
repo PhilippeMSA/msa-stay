@@ -465,3 +465,92 @@ textarea {
     grid-template-columns: 1fr;
   }
 }
+
+.admin-main--wide {
+  max-width: 1100px;
+}
+
+.bulk-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.bulk-toolbar select,
+.bulk-toolbar input[type="search"] {
+  min-width: 140px;
+  max-width: 220px;
+  font: inherit;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+}
+
+.bulk-mode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem 1.25rem;
+  font-size: 0.9rem;
+}
+
+.bulk-mode label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+}
+
+.bulk-property-list {
+  display: grid;
+  gap: 0.35rem;
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.55rem;
+  background: #fafafa;
+}
+
+.bulk-property-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  background: #fff;
+  border: 1px solid transparent;
+}
+
+.bulk-property-item:hover {
+  border-color: var(--line);
+}
+
+.bulk-property-copy {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.bulk-catalog-grid {
+  display: grid;
+  gap: 1.25rem;
+}
+
+@media (min-width: 900px) {
+  .bulk-catalog-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.35rem;
+  }
+}
+
+.bulk-section-title {
+  margin: 0 0 0.65rem;
+  font-size: 0.95rem;
+}
+
+.bulk-actions {
+  margin: 0 0 2rem;
+}

@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reservations · MSA Stay</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/staff.css" />
+    <link rel="icon" href="../assets/favicon.ico" sizes="any" />
+    <meta name="theme-color" content="#3C6169" />
+  </head>
+  <body>
+    <header class="staff-header">
+      <a class="staff-brand" href="calendar.html"
+        ><img
+          class="staff-logo"
+          src="../assets/logo.png"
+          alt="MSA Stay"
+          width="160"
+          height="36"
+        /><span class="staff-brand-label">Staff</span></a
+      >
+      <nav class="staff-nav"></nav>
+    </header>
+
+    <main class="staff-main">
+      <div class="toolbar">
+        <div>
+          <h1>Reservations</h1>
+          <p class="muted" id="role-hint">
+            All past, current, and upcoming stays in one list.
+          </p>
+        </div>
+        <div class="toolbar-group" id="manager-actions" hidden>
+          <button type="button" class="btn btn-primary" id="add-reservation">
+            + Add reservation
+          </button>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <div class="toolbar-group">
+          <select id="when-filter">
+            <option value="all">All dates</option>
+            <option value="current" selected>Current</option>
+            <option value="upcoming">Upcoming</option>
+            <option value="past">Past</option>
+          </select>
+          <select id="type-filter">
+            <option value="">All types</option>
+            <option value="booked">Reservation</option>
+            <option value="blocked">Blocked</option>
+            <option value="hold">Hold</option>
+          </select>
+          <select id="city-filter">
+            <option value="">All cities</option>
+          </select>
+          <select id="property-filter">
+            <option value="">All properties</option>
+          </select>
+          <input
+            type="search"
+            id="search-filter"
+            placeholder="Search note / property…"
+          />
+        </div>
+      </div>
+
+      <p class="status" id="status"></p>
+      <p class="muted" id="result-count"></p>
+
+      <section class="panel">
+        <div class="table-wrap">
+          <table class="users-table reservations-table">
+            <thead>
+              <tr>
+                <th>Property</th>
+                <th>Dates</th>
+                <th>Guests</th>
+                <th>Type</th>
+                <th>Tasks</th>
+                <th>Note</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="rows">
+              <tr>
+                <td colspan="7" class="muted">Loading…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel" id="detail" hidden>
+        <h2 id="detail-title">Details</h2>
+        <div id="detail-body"></div>
+        <div class="form-actions" style="margin-top: 0.75rem">
+          <button type="button" class="btn" id="close-detail">Close</button>
+          <button
+            type="button"
+            class="btn btn-primary"
+            id="edit-from-detail"
+            hidden
+          >
+            Edit
+          </button>
+        </div>
+      </section>
+
+      <section class="panel" id="editor" hidden>
+        <h2 id="editor-title">Add reservation</h2>
+        <form class="form-grid" id="block-form">
+          <input type="hidden" id="block-id" />
+          <label class="span-2">
+            Property
+            <select id="block-property" required></select>
+          </label>
+          <label>
+            Start / check-in (DD/MM/YYYY)
+            <input
+              type="text"
+              id="block-start"
+              required
+              placeholder="DD/MM/YYYY"
+              inputmode="numeric"
+              autocomplete="off"
+            />
+          </label>
+          <label>
+            End / check-out (DD/MM/YYYY)
+            <input
+              type="text"
+              id="block-end"
+              required
+              placeholder="DD/MM/YYYY"
+              inputmode="numeric"
+              autocomplete="off"
+            />
+          </label>
+          <label>
+            Type
+            <select id="block-status">
+              <option value="booked">Reservation</option>
+              <option value="blocked">Blocked</option>
+              <option value="hold">Hold</option>
+            </select>
+          </label>
+          <label id="guests-wrap">
+            Guests
+            <input
+              type="number"
+              id="block-guests"
+              min="0"
+              step="1"
+              placeholder="e.g. 2"
+            />
+          </label>
+          <label class="span-2">
+            Note (optional)
+            <input type="text" id="block-note" maxlength="200" />
+          </label>
+          <div class="span-2" id="day-tasks-wrap" hidden>
+            <h3 class="bulk-section-title">Daily tasks</h3>
+            <p class="muted">
+              Every reservation day has a Check. Add extras per day; assign a
+              staff member to each task. Assigned people see them under My
+              schedule.
+            </p>
+            <div id="day-tasks" class="day-tasks"></div>
+          </div>
+          <div class="span-2 form-actions">
+            <button class="btn btn-primary" type="submit">Save</button>
+            <button class="btn" type="button" id="cancel-edit">Cancel</button>
+            <button class="btn btn-danger" type="button" id="delete-block" hidden>
+              Delete
+            </button>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <script src="js/staff-common.js"></script>
+    <script>
+      (async function () {
+        const status = document.getElementById("status");
+        const rows = document.getElementById("rows");
+        const resultCount = document.getElementById("result-count");
+        const whenFilter = document.getElementById("when-filter");
+        const typeFilter = document.getElementById("type-filter");
+        const cityFilter = document.getElementById("city-filter");
+        const propertyFilter = document.getElementById("property-filter");
+        const searchFilter = document.getElementById("search-filter");
+        const detail = document.getElementById("detail");
+        const editor = document.getElementById("editor");
+
+        const me = await MSAStaff.requireAuth({
+          redirect: "reservations.html",
+        });
+        if (!me) return;
+
+        const user = me.user;
+        const canEdit = MSAStaff.canEditOps(user);
+        const dayTaskLabels = me.dayTaskLabels || {};
+        const dailyTaskTypes = me.dailyTaskTypes || [
+          "check",
+          "bed_change",
+          "towels_change",
+          "clean_up",
+        ];
+        const checkInTaskTypes = me.checkInTaskTypes || ["check_in"];
+        const checkOutTaskTypes = me.checkOutTaskTypes || ["check_out"];
+        const statusLabels = me.statusLabels || {
+          booked: "Reservation",
+          blocked: "Blocked",
+          hold: "Hold",
+        };
+
+        MSAStaff.fillHeader(user);
+        document.getElementById("role-hint").textContent = canEdit
+          ? "Managers can add, edit, and delete reservations here."
+          : "View-only list of reservations and stays.";
+        if (canEdit) {
+          document.getElementById("manager-actions").hidden = false;
+          document.getElementById("edit-from-detail").hidden = false;
+        } else {
+          editor.remove();
+        }
+
+        let properties = [];
+        let blocks = [];
+        let draftTasks = [];
+        let staffUsers = [];
+        let selectedId = null;
+
+        function todayIso() {
+          return MSAStaff.formatDateISO(new Date());
+        }
+
+        function taskLabel(type) {
+          return dayTaskLabels[type] || String(type || "").replace(/_/g, " ");
+        }
+
+        function statusLabel(status) {
+          return statusLabels[status] || status;
+        }
+
+        function periodOf(block) {
+          const today = todayIso();
+          if (block.endDate < today) return "past";
+          if (block.startDate > today) return "upcoming";
+          return "current";
+        }
+
+        function periodBadge(period) {
+          return (
+            '<span class="period-badge period-' +
+            period +
+            '">' +
+            period +
+            "</span>"
+          );
+        }
+
+        function propertiesForCity(citySlug) {
+          return properties.filter(function (p) {
+            return !citySlug || p.citySlug === citySlug;
+          });
+        }
+
+        function refreshPropertyFilter() {
+          const city = cityFilter.value;
+          const list = propertiesForCity(city);
+          const prev = propertyFilter.value;
+          propertyFilter.innerHTML =
+            '<option value="">All properties</option>' +
+            list
+              .map(function (p) {
+                return (
+                  '<option value="' +
+                  MSAStaff.escapeHtml(p.id) +
+                  '">' +
+                  MSAStaff.escapeHtml((city ? "" : p.city + " · ") + p.name) +
+                  "</option>"
+                );
+              })
+              .join("");
+          if (
+            list.some(function (p) {
+              return p.id === prev;
+            })
+          ) {
+            propertyFilter.value = prev;
+          }
+          if (canEdit) {
+            const sel = document.getElementById("block-property");
+            const editorPrev = sel.value;
+            sel.innerHTML = list
+              .map(function (p) {
+                return (
+                  '<option value="' +
+                  MSAStaff.escapeHtml(p.id) +
+                  '">' +
+                  MSAStaff.escapeHtml((city ? "" : p.city + " · ") + p.name) +
+                  "</option>"
+                );
+              })
+              .join("");
+            if (
+              list.some(function (p) {
+                return p.id === editorPrev;
+              })
+            ) {
+              sel.value = editorPrev;
+            } else if (list[0]) {
+              sel.value = list[0].id;
+            }
+          }
+        }
+
+        function fillCityFilter() {
+          const cities = [];
+          properties.forEach(function (p) {
+            if (
+              cities.every(function (c) {
+                return c.slug !== p.citySlug;
+              })
+            ) {
+              cities.push({ slug: p.citySlug, name: p.city });
+            }
+          });
+          cityFilter.innerHTML =
+            '<option value="">All cities</option>' +
+            cities
+              .map(function (c) {
+                return (
+                  '<option value="' +
+                  MSAStaff.escapeHtml(c.slug) +
+                  '">' +
+                  MSAStaff.escapeHtml(c.name) +
+                  "</option>"
+                );
+              })
+              .join("");
+          refreshPropertyFilter();
+        }
+
+        function filteredBlocks() {
+          const when = whenFilter.value;
+          const type = typeFilter.value;
+          const city = cityFilter.value;
+          const propertyId = propertyFilter.value;
+          const q = searchFilter.value.trim().toLowerCase();
+          return blocks
+            .filter(function (b) {
+              if (when !== "all" && periodOf(b) !== when) return false;
+              if (type && b.status !== type) return false;
+              if (city && b.citySlug !== city) return false;
+              if (propertyId && b.propertyId !== propertyId) return false;
+              if (q) {
+                const hay = (
+                  (b.propertyName || "") +
+                  " " +
+                  (b.city || "") +
+                  " " +
+                  (b.note || "")
+                ).toLowerCase();
+                if (hay.indexOf(q) === -1) return false;
+              }
+              return true;
+            })
+            .sort(function (a, b) {
+              if (a.startDate === b.startDate) {
+                return (b.id || 0) - (a.id || 0);
+              }
+              return a.startDate < b.startDate ? 1 : -1;
+            });
+        }
+
+        function taskSummary(block) {
+          if (block.status !== "booked") return "—";
+          const tasks = block.tasks || [];
+          if (!tasks.length) return "Check (auto)";
+          const counts = {};
+          tasks.forEach(function (t) {
+            counts[t.type] = (counts[t.type] || 0) + 1;
+          });
+          return Object.keys(counts)
+            .map(function (type) {
+              return taskLabel(type) + " ×" + counts[type];
+            })
+            .join(", ");
+        }
+
+        function renderTable() {
+          const list = filteredBlocks();
+          resultCount.textContent =
+            list.length +
+            " record" +
+            (list.length === 1 ? "" : "s") +
+            " shown";
+          if (!list.length) {
+            rows.innerHTML =
+              '<tr><td colspan="7" class="muted">No reservations match.</td></tr>';
+            return;
+          }
+          rows.innerHTML = list
+            .map(function (b) {
+              const period = periodOf(b);
+              return (
+                "<tr data-id=\"" +
+                b.id +
+                '">' +
+                "<td><strong>" +
+                MSAStaff.escapeHtml(b.propertyName || b.propertyId) +
+                '</strong><div class="muted">' +
+                MSAStaff.escapeHtml(b.city || "") +
+                "</div></td>" +
+                "<td>" +
+                MSAStaff.escapeHtml(MSAStaff.formatDateDMY(b.startDate)) +
+                " → " +
+                MSAStaff.escapeHtml(MSAStaff.formatDateDMY(b.endDate)) +
+                "<div>" +
+                periodBadge(period) +
+                "</div></td>" +
+                "<td>" +
+                (b.status === "booked"
+                  ? b.guestCount != null
+                    ? MSAStaff.escapeHtml(String(b.guestCount))
+                    : "—"
+                  : "—") +
+                "</td>" +
+                "<td>" +
+                MSAStaff.escapeHtml(statusLabel(b.status)) +
+                "</td>" +
+                '<td class="muted">' +
+                MSAStaff.escapeHtml(taskSummary(b)) +
+                "</td>" +
+                "<td>" +
+                MSAStaff.escapeHtml(b.note || "—") +
+                "</td>" +
+                '<td class="row-actions">' +
+                '<button type="button" class="btn" data-action="view" data-id="' +
+                b.id +
+                '">View</button>' +
+                (canEdit
+                  ? ' <button type="button" class="btn" data-action="edit" data-id="' +
+                    b.id +
+                    '">Edit</button>'
+                  : "") +
+                "</td></tr>"
+              );
+            })
+            .join("");
+        }
+
+        function findBlock(id) {
+          return blocks.find(function (b) {
+            return b.id === Number(id);
+          });
+        }
+
+        function openDetail(block) {
+          selectedId = block.id;
+          detail.hidden = false;
+          if (canEdit) editor.hidden = true;
+          const dates = MSAStaff.eachDateInclusive(
+            block.startDate,
+            block.endDate
+          );
+          const daysHtml =
+            block.status === "booked"
+              ? '<div class="day-tasks">' +
+                dates
+                  .map(function (date, index) {
+                    const tasks = (block.tasks || []).filter(function (t) {
+                      return t.date === date;
+                    });
+                    const tag =
+                      index === 0 && index === dates.length - 1
+                        ? " · check-in / check-out"
+                        : index === 0
+                          ? " · check-in"
+                          : index === dates.length - 1
+                            ? " · check-out"
+                            : "";
+                    return (
+                      '<div class="day-task-row"><div class="day-task-date">' +
+                      MSAStaff.escapeHtml(
+                        MSAStaff.formatDateDMY(date) + tag
+                      ) +
+                      '</div><div class="day-task-chips">' +
+                      (tasks.length
+                        ? tasks
+                            .map(function (t) {
+                              return (
+                                '<span class="task-pill task-pill-' +
+                                MSAStaff.escapeHtml(t.type) +
+                                '">' +
+                                MSAStaff.escapeHtml(taskLabel(t.type)) +
+                                (t.assigneeName
+                                  ? " · " +
+                                    MSAStaff.escapeHtml(t.assigneeName)
+                                  : "") +
+                                "</span>"
+                              );
+                            })
+                            .join("")
+                        : '<span class="muted">No tasks</span>') +
+                      "</div></div>"
+                    );
+                  })
+                  .join("") +
+                "</div>"
+              : "";
+
+          document.getElementById("detail-title").textContent =
+            statusLabel(block.status) +
+            " · " +
+            (block.propertyName || block.propertyId);
+          document.getElementById("detail-body").innerHTML =
+            "<p><strong>" +
+            MSAStaff.escapeHtml(MSAStaff.formatDateDMY(block.startDate)) +
+            " → " +
+            MSAStaff.escapeHtml(MSAStaff.formatDateDMY(block.endDate)) +
+            "</strong> " +
+            periodBadge(periodOf(block)) +
+            "</p>" +
+            (block.status === "booked"
+              ? "<p>Guests: <strong>" +
+                (block.guestCount != null
+                  ? MSAStaff.escapeHtml(String(block.guestCount))
+                  : "—") +
+                "</strong></p>"
+              : "") +
+            (block.note
+              ? "<p class=\"muted\">" +
+                MSAStaff.escapeHtml(block.note) +
+                "</p>"
+              : "") +
+            daysHtml;
+          detail.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+
+        function closeDetail() {
+          detail.hidden = true;
+          selectedId = null;
+        }
+
+        function assigneeOptionsHtml(selectedId) {
+          return (
+            '<option value="">Unassigned</option>' +
+            staffUsers
+              .map(function (u) {
+                return (
+                  '<option value="' +
+                  u.id +
+                  '"' +
+                  (Number(selectedId) === u.id ? " selected" : "") +
+                  ">" +
+                  MSAStaff.escapeHtml(u.name) +
+                  (u.role === "admin"
+                    ? " (admin)"
+                    : u.role === "manager"
+                      ? " (manager)"
+                      : "") +
+                  "</option>"
+                );
+              })
+              .join("")
+          );
+        }
+
+        function collectDraftFromDom() {
+          if (!canEdit) return draftTasks;
+          const wrap = document.getElementById("day-tasks");
+          if (!wrap) return draftTasks;
+          const next = [];
+          wrap.querySelectorAll(".day-task-item").forEach(function (item) {
+            const input = item.querySelector('input[type="checkbox"]');
+            if (!input) return;
+            const type = input.getAttribute("data-task-type");
+            const date = input.getAttribute("data-task-date");
+            const locked = type === "check";
+            if (!locked && !input.checked) return;
+            const select = item.querySelector("select[data-assignee]");
+            const assigneeId =
+              select && select.value ? Number(select.value) : null;
+            next.push({
+              date: date,
+              type: type,
+              completed: false,
+              assigneeId: assigneeId,
+            });
+          });
+          wrap.querySelectorAll(".day-task-row").forEach(function (row) {
+            const date = row.getAttribute("data-date");
+            if (
+              !next.some(function (t) {
+                return t.date === date && t.type === "check";
+              })
+            ) {
+              next.push({
+                date: date,
+                type: "check",
+                completed: false,
+                assigneeId: null,
+              });
+            }
+          });
+          draftTasks = next;
+          return draftTasks;
+        }
+
+        function renderDayTasksEditor() {
+          const wrap = document.getElementById("day-tasks");
+          const startDate = MSAStaff.toISODateString(
+            document.getElementById("block-start").value
+          );
+          const endDate = MSAStaff.toISODateString(
+            document.getElementById("block-end").value
+          );
+          if (!startDate || !endDate || endDate < startDate) {
+            wrap.innerHTML =
+              '<p class="muted">Enter valid start and end dates to set daily tasks.</p>';
+            return;
+          }
+          const dates = MSAStaff.eachDateInclusive(startDate, endDate);
+          const selected = {};
+          const assignees = {};
+          draftTasks.forEach(function (t) {
+            selected[t.date + "|" + t.type] = true;
+            assignees[t.date + "|" + t.type] = t.assigneeId || null;
+          });
+          dates.forEach(function (date) {
+            selected[date + "|check"] = true;
+          });
+          wrap.innerHTML = dates
+            .map(function (date, index) {
+              const isFirst = index === 0;
+              const isLast = index === dates.length - 1;
+              const kinds = dailyTaskTypes.slice();
+              if (isFirst) {
+                checkInTaskTypes.forEach(function (t) {
+                  if (kinds.indexOf(t) === -1) kinds.push(t);
+                });
+              }
+              if (isLast) {
+                checkOutTaskTypes.forEach(function (t) {
+                  if (kinds.indexOf(t) === -1) kinds.push(t);
+                });
+              }
+              const dayLabel =
+                MSAStaff.formatDateDMY(date) +
+                (isFirst && isLast
+                  ? " · check-in / check-out"
+                  : isFirst
+                    ? " · check-in"
+                    : isLast
+                      ? " · check-out"
+                      : "");
+              const checks = kinds
+                .map(function (type) {
+                  const key = date + "|" + type;
+                  const locked = type === "check";
+                  const on = selected[key] || locked;
+                  return (
+                    '<div class="day-task-item">' +
+                    '<label class="day-task-chip">' +
+                    '<input type="checkbox" data-task-date="' +
+                    date +
+                    '" data-task-type="' +
+                    type +
+                    '"' +
+                    (on ? " checked" : "") +
+                    (locked ? " disabled" : "") +
+                    " /> " +
+                    MSAStaff.escapeHtml(taskLabel(type)) +
+                    "</label>" +
+                    '<select data-assignee class="day-task-assignee"' +
+                    (on ? "" : " disabled") +
+                    ">" +
+                    assigneeOptionsHtml(assignees[key]) +
+                    "</select></div>"
+                  );
+                })
+                .join("");
+              return (
+                '<div class="day-task-row" data-date="' +
+                date +
+                '"><div class="day-task-date">' +
+                MSAStaff.escapeHtml(dayLabel) +
+                '</div><div class="day-task-chips day-task-assign-grid">' +
+                checks +
+                "</div></div>"
+              );
+            })
+            .join("");
+        }
+
+        function syncReservationUi() {
+          if (!canEdit) return;
+          const isBooked =
+            document.getElementById("block-status").value === "booked";
+          document.getElementById("guests-wrap").hidden = !isBooked;
+          document.getElementById("day-tasks-wrap").hidden = !isBooked;
+          document.getElementById("block-guests").required = isBooked;
+          if (isBooked) renderDayTasksEditor();
+        }
+
+        function openEditor(block) {
+          if (!canEdit) return;
+          closeDetail();
+          editor.hidden = false;
+          const editing = !!(block && block.id);
+          document.getElementById("editor-title").textContent = editing
+            ? "Edit reservation"
+            : "Add reservation";
+          document.getElementById("block-id").value = editing ? block.id : "";
+          document.getElementById("block-property").value =
+            (block && block.propertyId) ||
+            (properties[0] && properties[0].id) ||
+            "";
+          document.getElementById("block-start").value = MSAStaff.formatDateDMY(
+            (block && block.startDate) || todayIso()
+          );
+          document.getElementById("block-end").value = MSAStaff.formatDateDMY(
+            (block && block.endDate) || todayIso()
+          );
+          document.getElementById("block-status").value =
+            (block && block.status) || "booked";
+          document.getElementById("block-guests").value =
+            block && block.guestCount != null ? block.guestCount : "";
+          document.getElementById("block-note").value =
+            (block && block.note) || "";
+          document.getElementById("delete-block").hidden = !editing;
+          draftTasks = ((block && block.tasks) || []).map(function (t) {
+            return {
+              date: t.date,
+              type: t.type,
+              completed: !!t.completed,
+              assigneeId: t.assigneeId || null,
+            };
+          });
+          syncReservationUi();
+          editor.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+
+        function closeEditor() {
+          if (!canEdit) return;
+          editor.hidden = true;
+          document.getElementById("block-form").reset();
+          document.getElementById("block-id").value = "";
+          document.getElementById("delete-block").hidden = true;
+          draftTasks = [];
+        }
+
+        async function load() {
+          MSAStaff.setStatus(status, "Loading…");
+          try {
+            const data = await MSAStaff.api("/api/staff/availability");
+            blocks = data.blocks || [];
+            if (canEdit && data.staffUsers) staffUsers = data.staffUsers;
+            MSAStaff.setStatus(status, "");
+            renderTable();
+          } catch (err) {
+            rows.innerHTML =
+              '<tr><td colspan="7" class="muted">Could not load reservations.</td></tr>';
+            MSAStaff.setStatus(status, err.message, "err");
+          }
+        }
+
+        [
+          whenFilter,
+          typeFilter,
+          cityFilter,
+          propertyFilter,
+          searchFilter,
+        ].forEach(function (el) {
+          el.addEventListener(
+            el === searchFilter ? "input" : "change",
+            function () {
+              if (el === cityFilter) refreshPropertyFilter();
+              renderTable();
+            }
+          );
+        });
+
+        rows.addEventListener("click", function (event) {
+          const btn = event.target.closest("button[data-action]");
+          if (!btn) return;
+          const block = findBlock(btn.getAttribute("data-id"));
+          if (!block) return;
+          if (btn.getAttribute("data-action") === "view") openDetail(block);
+          if (btn.getAttribute("data-action") === "edit") openEditor(block);
+        });
+
+        document
+          .getElementById("close-detail")
+          .addEventListener("click", closeDetail);
+        document
+          .getElementById("edit-from-detail")
+          .addEventListener("click", function () {
+            const block = findBlock(selectedId);
+            if (block) openEditor(block);
+          });
+
+        if (canEdit) {
+          document
+            .getElementById("add-reservation")
+            .addEventListener("click", function () {
+              openEditor(null);
+            });
+          document
+            .getElementById("cancel-edit")
+            .addEventListener("click", closeEditor);
+          document
+            .getElementById("block-status")
+            .addEventListener("change", syncReservationUi);
+          ["block-start", "block-end"].forEach(function (id) {
+            document.getElementById(id).addEventListener("change", function () {
+              collectDraftFromDom();
+              syncReservationUi();
+            });
+            document.getElementById(id).addEventListener("blur", function () {
+              collectDraftFromDom();
+              syncReservationUi();
+            });
+          });
+          document
+            .getElementById("day-tasks")
+            .addEventListener("change", function (event) {
+              const input = event.target.closest('input[type="checkbox"]');
+              if (input) {
+                const item = input.closest(".day-task-item");
+                const select =
+                  item && item.querySelector("select[data-assignee]");
+                if (select) {
+                  select.disabled =
+                    input.getAttribute("data-task-type") !== "check" &&
+                    !input.checked;
+                }
+              }
+              collectDraftFromDom();
+            });
+          document
+            .getElementById("block-form")
+            .addEventListener("submit", async function (event) {
+              event.preventDefault();
+              const id = document.getElementById("block-id").value;
+              const startDate = MSAStaff.toISODateString(
+                document.getElementById("block-start").value
+              );
+              const endDate = MSAStaff.toISODateString(
+                document.getElementById("block-end").value
+              );
+              if (!startDate || !endDate) {
+                MSAStaff.setStatus(status, "Use dates as DD/MM/YYYY.", "err");
+                return;
+              }
+              const blockStatus =
+                document.getElementById("block-status").value;
+              const guestsRaw = document.getElementById("block-guests").value;
+              const payload = {
+                propertyId: document.getElementById("block-property").value,
+                startDate: startDate,
+                endDate: endDate,
+                status: blockStatus,
+                note: document.getElementById("block-note").value,
+                guestCount:
+                  blockStatus === "booked"
+                    ? guestsRaw === ""
+                      ? null
+                      : Number(guestsRaw)
+                    : null,
+                tasks: blockStatus === "booked" ? collectDraftFromDom() : [],
+              };
+              MSAStaff.setStatus(status, "Saving…");
+              try {
+                if (id) {
+                  await MSAStaff.api("/api/staff/availability/" + id, {
+                    method: "PUT",
+                    body: JSON.stringify(payload),
+                  });
+                } else {
+                  await MSAStaff.api("/api/staff/availability", {
+                    method: "POST",
+                    body: JSON.stringify(payload),
+                  });
+                }
+                closeEditor();
+                MSAStaff.setStatus(status, "Saved.", "ok");
+                await load();
+              } catch (err) {
+                MSAStaff.setStatus(status, err.message, "err");
+              }
+            });
+          document
+            .getElementById("delete-block")
+            .addEventListener("click", async function () {
+              const id = document.getElementById("block-id").value;
+              if (!id) return;
+              if (!window.confirm("Delete this reservation?")) return;
+              try {
+                await MSAStaff.api("/api/staff/availability/" + id, {
+                  method: "DELETE",
+                });
+                closeEditor();
+                MSAStaff.setStatus(status, "Deleted.", "ok");
+                await load();
+              } catch (err) {
+                MSAStaff.setStatus(status, err.message, "err");
+              }
+            });
+        }
+
+        try {
+          const propsData = await MSAStaff.api("/api/properties");
+          properties = propsData.properties || [];
+          fillCityFilter();
+          await load();
+        } catch (err) {
+          MSAStaff.setStatus(status, err.message, "err");
+        }
+      })();
+    </script>
+  </body>
+</html>

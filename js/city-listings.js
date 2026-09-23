@@ -1,6 +1,6 @@
 /**
  * Renders city listing pages from the API.
- * One grid + building filter (street kept for grouping only — not shown publicly).
+ * Building filter + sort/filter by guests, bedrooms, kitchen, status.
  * Expects: data-city-slug on #city-listings
  */
 (function () {
@@ -51,7 +51,7 @@
     return property.street || "__other__";
   }
 
-  function renderCard(property) {
+  function renderCard(property, buildingLabels) {
     const isUpcoming = property.status === "upcoming";
     const cover =
       property.images && property.images.length
@@ -69,12 +69,13 @@
         return "<li>" + escapeHtml(t) + "</li>";
       })
       .join("");
+    const key = buildingKey(property);
 
     return (
       '<a class="unit-card-link" href="property.html?id=' +
       encodeURIComponent(property.id) +
       '" data-building="' +
-      escapeHtml(buildingKey(property)) +
+      escapeHtml(key) +
       '">' +
       '<article class="unit-card' +
       (isUpcoming ? " unit-card--upcoming" : "") +
@@ -95,6 +96,7 @@
       "</h3>" +
       '<p class="unit-address">' +
       escapeHtml(property.city) +
+      (buildingLabels[key] ? " · " + escapeHtml(buildingLabels[key]) : "") +
       "</p>" +
       "<p>" +
       escapeHtml(shortDescription(property.description)) +
@@ -106,19 +108,93 @@
     );
   }
 
-  function applyFilter(root, building) {
-    root.querySelectorAll(".unit-card-link").forEach(function (card) {
-      const match =
-        building === "all" || card.getAttribute("data-building") === building;
-      card.hidden = !match;
+  function uniqueSorted(values) {
+    const out = [];
+    values.forEach(function (v) {
+      if (v == null || v === "") return;
+      if (out.indexOf(v) === -1) out.push(v);
     });
-    root.querySelectorAll(".building-filter button").forEach(function (btn) {
-      btn.classList.toggle("is-active", btn.getAttribute("data-building") === building);
-      btn.setAttribute(
-        "aria-pressed",
-        btn.getAttribute("data-building") === building ? "true" : "false"
-      );
+    out.sort(function (a, b) {
+      if (typeof a === "number" && typeof b === "number") return a - b;
+      return String(a).localeCompare(String(b), undefined, { numeric: true });
     });
+    return out;
+  }
+
+  function applyFilters(properties, state) {
+    return properties.filter(function (p) {
+      const basics = p.basics || {};
+      const amenities = p.amenities || [];
+
+      if (state.building !== "all" && buildingKey(p) !== state.building) {
+        return false;
+      }
+      if (state.status && p.status !== state.status) return false;
+      if (
+        state.minGuests !== "" &&
+        (basics.maxGuests == null ||
+          Number(basics.maxGuests) < Number(state.minGuests))
+      ) {
+        return false;
+      }
+      if (
+        state.minBedrooms !== "" &&
+        (basics.bedrooms == null ||
+          Number(basics.bedrooms) < Number(state.minBedrooms))
+      ) {
+        return false;
+      }
+      if (state.kitchen && basics.kitchen !== state.kitchen) return false;
+      if (state.bedType && basics.bedType !== state.bedType) return false;
+      if (state.amenity === "Workspace" && amenities.indexOf("Workspace") === -1) {
+        return false;
+      }
+      if (state.amenity === "Parking" && amenities.indexOf("Parking") === -1) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  function sortProperties(list, sortKey) {
+    const copy = list.slice();
+    copy.sort(function (a, b) {
+      const ba = a.basics || {};
+      const bb = b.basics || {};
+      switch (sortKey) {
+        case "guests-desc":
+          return (Number(bb.maxGuests) || 0) - (Number(ba.maxGuests) || 0);
+        case "guests-asc":
+          return (Number(ba.maxGuests) || 0) - (Number(bb.maxGuests) || 0);
+        case "bedrooms-desc":
+          return (Number(bb.bedrooms) || 0) - (Number(ba.bedrooms) || 0);
+        case "bedrooms-asc":
+          return (Number(ba.bedrooms) || 0) - (Number(bb.bedrooms) || 0);
+        case "name-desc":
+          return String(b.name || "").localeCompare(String(a.name || ""));
+        case "status":
+          if (a.status === b.status) {
+            return String(a.name || "").localeCompare(String(b.name || ""));
+          }
+          return a.status === "available" ? -1 : 1;
+        case "name-asc":
+        default:
+          return String(a.name || "").localeCompare(String(b.name || ""));
+      }
+    });
+    return copy;
+  }
+
+  function optionHtml(value, label, selected) {
+    return (
+      '<option value="' +
+      escapeHtml(String(value)) +
+      '"' +
+      (String(selected) === String(value) ? " selected" : "") +
+      ">" +
+      escapeHtml(label) +
+      "</option>"
+    );
   }
 
   async function init() {
@@ -136,14 +212,9 @@
     );
 
     const meta = document.getElementById("city-page-meta");
-    if (meta) {
-      meta.textContent =
-        properties.length +
-        " unit" +
-        (properties.length === 1 ? "" : "s");
-    }
 
     if (!properties.length) {
+      if (meta) meta.textContent = "0 units";
       root.innerHTML =
         '<section class="section listing-section"><p class="lede">No properties listed for this city yet.</p></section>';
       return;
@@ -163,39 +234,278 @@
       buildingLabels[key] = "Building " + (index + 1);
     });
 
-    let filterHtml = "";
-    if (buildings.length > 1) {
-      filterHtml =
-        '<div class="building-filter" role="group" aria-label="Filter by building">' +
-        '<button type="button" class="is-active" data-building="all" aria-pressed="true">All</button>' +
-        buildings
-          .map(function (key) {
-            return (
-              '<button type="button" data-building="' +
-              escapeHtml(key) +
-              '" aria-pressed="false">' +
-              escapeHtml(buildingLabels[key]) +
-              "</button>"
+    const guestOptions = uniqueSorted(
+      properties.map(function (p) {
+        return p.basics && p.basics.maxGuests != null
+          ? Number(p.basics.maxGuests)
+          : null;
+      })
+    );
+    const bedroomOptions = uniqueSorted(
+      properties.map(function (p) {
+        return p.basics && p.basics.bedrooms != null
+          ? Number(p.basics.bedrooms)
+          : null;
+      })
+    );
+    const kitchenOptions = uniqueSorted(
+      properties.map(function (p) {
+        return (p.basics && p.basics.kitchen) || "";
+      })
+    );
+    const bedTypeOptions = uniqueSorted(
+      properties.map(function (p) {
+        return (p.basics && p.basics.bedType) || "";
+      })
+    );
+    const hasWorkspace = properties.some(function (p) {
+      return (p.amenities || []).indexOf("Workspace") !== -1;
+    });
+    const hasParking = properties.some(function (p) {
+      return (p.amenities || []).indexOf("Parking") !== -1;
+    });
+    const hasUpcoming = properties.some(function (p) {
+      return p.status === "upcoming";
+    });
+    const hasAvailable = properties.some(function (p) {
+      return p.status !== "upcoming";
+    });
+
+    const state = {
+      building: "all",
+      sort: "name-asc",
+      minGuests: "",
+      minBedrooms: "",
+      kitchen: "",
+      bedType: "",
+      status: "",
+      amenity: "",
+    };
+
+    function renderFiltersBar() {
+      let buildingHtml = "";
+      if (buildings.length > 1) {
+        buildingHtml =
+          '<div class="building-filter" role="group" aria-label="Filter by building">' +
+          '<button type="button" data-building="all" aria-pressed="' +
+          (state.building === "all" ? "true" : "false") +
+          '"' +
+          (state.building === "all" ? ' class="is-active"' : "") +
+          ">All</button>" +
+          buildings
+            .map(function (key) {
+              const active = state.building === key;
+              return (
+                '<button type="button" data-building="' +
+                escapeHtml(key) +
+                '" aria-pressed="' +
+                (active ? "true" : "false") +
+                '"' +
+                (active ? ' class="is-active"' : "") +
+                ">" +
+                escapeHtml(buildingLabels[key]) +
+                "</button>"
+              );
+            })
+            .join("") +
+          "</div>";
+      }
+
+      const guestOpts =
+        optionHtml("", "Any guests", state.minGuests) +
+        guestOptions
+          .map(function (n) {
+            return optionHtml(
+              n,
+              n + "+ guest" + (n === 1 ? "" : "s"),
+              state.minGuests
             );
           })
-          .join("") +
-        "</div>";
+          .join("");
+
+      const bedroomOpts =
+        optionHtml("", "Any bedrooms", state.minBedrooms) +
+        bedroomOptions
+          .map(function (n) {
+            return optionHtml(
+              n,
+              n + "+ bedroom" + (n === 1 ? "" : "s"),
+              state.minBedrooms
+            );
+          })
+          .join("");
+
+      const kitchenOpts =
+        optionHtml("", "Any kitchen", state.kitchen) +
+        kitchenOptions
+          .map(function (k) {
+            return optionHtml(k, k, state.kitchen);
+          })
+          .join("");
+
+      function filterField(title, selectHtml) {
+        return (
+          "<label><span class=\"listing-filters-title\">" +
+          title +
+          "</span>" +
+          selectHtml +
+          "</label>"
+        );
+      }
+
+      let bedTypeBlock = "";
+      if (bedTypeOptions.length > 1) {
+        bedTypeBlock = filterField(
+          "Bed type",
+          '<select name="bedType" aria-label="Filter by bed type">' +
+            optionHtml("", "Any bed type", state.bedType) +
+            bedTypeOptions
+              .map(function (b) {
+                return optionHtml(b, b, state.bedType);
+              })
+              .join("") +
+            "</select>"
+        );
+      }
+
+      let statusBlock = "";
+      if (hasUpcoming && hasAvailable) {
+        statusBlock = filterField(
+          "Status",
+          '<select name="status" aria-label="Filter by status">' +
+            optionHtml("", "All statuses", state.status) +
+            optionHtml("available", "Available", state.status) +
+            optionHtml("upcoming", "Upcoming", state.status) +
+            "</select>"
+        );
+      }
+
+      let amenityBlock = "";
+      if (hasWorkspace || hasParking) {
+        amenityBlock = filterField(
+          "Feature",
+          '<select name="amenity" aria-label="Filter by feature">' +
+            optionHtml("", "Any feature", state.amenity) +
+            (hasWorkspace
+              ? optionHtml("Workspace", "Workspace", state.amenity)
+              : "") +
+            (hasParking ? optionHtml("Parking", "Parking", state.amenity) : "") +
+            "</select>"
+        );
+      }
+
+      return (
+        buildingHtml +
+        '<form class="listing-filters" id="listing-filters">' +
+        filterField(
+          "Sort by",
+          '<select name="sort" aria-label="Sort listings">' +
+            optionHtml("name-asc", "Name A–Z", state.sort) +
+            optionHtml("name-desc", "Name Z–A", state.sort) +
+            optionHtml("guests-desc", "Guests: high to low", state.sort) +
+            optionHtml("guests-asc", "Guests: low to high", state.sort) +
+            optionHtml("bedrooms-desc", "Bedrooms: high to low", state.sort) +
+            optionHtml("bedrooms-asc", "Bedrooms: low to high", state.sort) +
+            optionHtml("status", "Available first", state.sort) +
+            "</select>"
+        ) +
+        filterField(
+          "Guests",
+          '<select name="minGuests" aria-label="Minimum guests">' +
+            guestOpts +
+            "</select>"
+        ) +
+        filterField(
+          "Bedrooms",
+          '<select name="minBedrooms" aria-label="Minimum bedrooms">' +
+            bedroomOpts +
+            "</select>"
+        ) +
+        filterField(
+          "Kitchen",
+          '<select name="kitchen" aria-label="Filter by kitchen">' +
+            kitchenOpts +
+            "</select>"
+        ) +
+        bedTypeBlock +
+        statusBlock +
+        amenityBlock +
+        '<button type="button" class="btn listing-filters-reset" id="listing-filters-reset">Reset</button>' +
+        "</form>"
+      );
     }
 
-    root.innerHTML =
-      '<section class="section listing-section">' +
-      filterHtml +
-      '<div class="unit-grid">' +
-      properties.map(renderCard).join("") +
-      "</div></section>";
-
-    if (buildings.length > 1) {
-      root.querySelector(".building-filter").addEventListener("click", function (event) {
-        const btn = event.target.closest("button[data-building]");
-        if (!btn) return;
-        applyFilter(root, btn.getAttribute("data-building"));
-      });
+    function updateMeta(count) {
+      if (!meta) return;
+      meta.textContent =
+        count +
+        " unit" +
+        (count === 1 ? "" : "s") +
+        (count !== properties.length
+          ? " (of " + properties.length + ")"
+          : "");
     }
+
+    function render() {
+      const filtered = sortProperties(
+        applyFilters(properties, state),
+        state.sort
+      );
+      updateMeta(filtered.length);
+
+      const gridHtml = filtered.length
+        ? '<div class="unit-grid">' +
+          filtered
+            .map(function (p) {
+              return renderCard(p, buildingLabels);
+            })
+            .join("") +
+          "</div>"
+        : '<p class="listing-empty lede">No properties match these filters.</p>';
+
+      root.innerHTML =
+        '<section class="section listing-section">' +
+        renderFiltersBar() +
+        gridHtml +
+        "</section>";
+
+      const form = root.querySelector("#listing-filters");
+      if (form) {
+        form.addEventListener("change", function (event) {
+          const el = event.target;
+          if (!el || !el.name) return;
+          state[el.name] = el.value;
+          render();
+        });
+      }
+
+      const reset = root.querySelector("#listing-filters-reset");
+      if (reset) {
+        reset.addEventListener("click", function () {
+          state.building = "all";
+          state.sort = "name-asc";
+          state.minGuests = "";
+          state.minBedrooms = "";
+          state.kitchen = "";
+          state.bedType = "";
+          state.status = "";
+          state.amenity = "";
+          render();
+        });
+      }
+
+      const buildingFilter = root.querySelector(".building-filter");
+      if (buildingFilter) {
+        buildingFilter.addEventListener("click", function (event) {
+          const btn = event.target.closest("button[data-building]");
+          if (!btn) return;
+          state.building = btn.getAttribute("data-building");
+          render();
+        });
+      }
+    }
+
+    render();
   }
 
   if (document.readyState === "loading") {

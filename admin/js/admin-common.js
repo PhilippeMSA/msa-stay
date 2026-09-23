@@ -31,6 +31,7 @@ function escapeHtml(value) {
 function adminNav(active) {
   const links = [
     ["index.html", "Properties"],
+    ["bulk-assign.html", "Bulk assign"],
     ["cities.html", "Cities"],
     ["amenities.html", "Amenities"],
     ["services.html", "Services"],

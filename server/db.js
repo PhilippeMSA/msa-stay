@@ -258,11 +258,64 @@ function ensureDb() {
       FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,
       FOREIGN KEY (paid_service_id) REFERENCES paid_services(id) ON DELETE RESTRICT
     );
+
+    CREATE TABLE IF NOT EXISTS staff_users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      name TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'staff',
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS staff_sessions (
+      token TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES staff_users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS availability_blocks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      property_id TEXT NOT NULL,
+      start_date TEXT NOT NULL,
+      end_date TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'booked',
+      note TEXT NOT NULL DEFAULT '',
+      guest_count INTEGER,
+      created_by INTEGER,
+      updated_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (property_id) REFERENCES properties(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by) REFERENCES staff_users(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS availability_day_tasks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      block_id INTEGER NOT NULL,
+      task_date TEXT NOT NULL,
+      task_type TEXT NOT NULL,
+      completed INTEGER NOT NULL DEFAULT 0,
+      UNIQUE (block_id, task_date, task_type),
+      FOREIGN KEY (block_id) REFERENCES availability_blocks(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_availability_property_dates
+      ON availability_blocks (property_id, start_date, end_date);
+    CREATE INDEX IF NOT EXISTS idx_availability_day_tasks_block
+      ON availability_day_tasks (block_id, task_date);
+    CREATE INDEX IF NOT EXISTS idx_staff_sessions_user
+      ON staff_sessions (user_id);
   `);
 
   migrateAmenityColumns(db);
   migratePropertyAmenityColumns(db);
   migratePropertyCoordinates(db);
+  migrateAvailabilityGuestCount(db);
+  ensureStaffAdmin(db);
 
   return db;
 }
@@ -291,6 +344,56 @@ function migratePropertyAmenityColumns(db) {
 function migratePropertyCoordinates(db) {
   ensureColumn(db, "properties", "latitude", `REAL`);
   ensureColumn(db, "properties", "longitude", `REAL`);
+}
+
+function migrateAvailabilityGuestCount(db) {
+  ensureColumn(db, "availability_blocks", "guest_count", `INTEGER`);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS availability_day_tasks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      block_id INTEGER NOT NULL,
+      task_date TEXT NOT NULL,
+      task_type TEXT NOT NULL,
+      completed INTEGER NOT NULL DEFAULT 0,
+      UNIQUE (block_id, task_date, task_type),
+      FOREIGN KEY (block_id) REFERENCES availability_blocks(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_availability_day_tasks_block
+      ON availability_day_tasks (block_id, task_date);
+  `);
+  ensureColumn(db, "availability_day_tasks", "assignee_id", `INTEGER`);
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_availability_day_tasks_assignee
+      ON availability_day_tasks (assignee_id, task_date);
+  `);
+}
+
+/** Rename legacy owner→admin, then ensure at least one active admin. */
+function ensureStaffAdmin(db) {
+  db.prepare(
+    `UPDATE staff_users SET role = 'admin', updated_at = ? WHERE role = 'owner'`
+  ).run(new Date().toISOString());
+
+  const admins = db
+    .prepare(
+      `SELECT COUNT(*) AS c FROM staff_users WHERE role = 'admin' AND active = 1`
+    )
+    .get().c;
+  if (admins > 0) return;
+  const candidate = db
+    .prepare(
+      `SELECT id FROM staff_users
+       WHERE active = 1
+       ORDER BY
+         CASE WHEN role = 'manager' THEN 0 ELSE 1 END,
+         id ASC
+       LIMIT 1`
+    )
+    .get();
+  if (!candidate) return;
+  db.prepare(
+    `UPDATE staff_users SET role = 'admin', updated_at = ? WHERE id = ?`
+  ).run(new Date().toISOString(), candidate.id);
 }
 
 function nowIso() {
@@ -784,6 +887,134 @@ function setPropertyServices(db, propertyId, serviceIds) {
     });
   });
   tx();
+}
+
+/**
+ * Bulk add or remove amenities / services / paid services across properties.
+ * mode: "add" (default) merges ids; "remove" deletes matching links only.
+ */
+function bulkAssignPropertyExtras(db, input = {}) {
+  const propertyIds = Array.from(
+    new Set(
+      (input.propertyIds || [])
+        .map((id) => String(id || "").trim())
+        .filter(Boolean)
+    )
+  );
+  const amenityIds = Array.from(
+    new Set(
+      (input.amenityIds || [])
+        .map(Number)
+        .filter((id) => Number.isFinite(id))
+    )
+  );
+  const serviceIds = Array.from(
+    new Set(
+      (input.serviceIds || [])
+        .map(Number)
+        .filter((id) => Number.isFinite(id))
+    )
+  );
+  const paidServiceIds = Array.from(
+    new Set(
+      (input.paidServiceIds || [])
+        .map(Number)
+        .filter((id) => Number.isFinite(id))
+    )
+  );
+  const mode = input.mode === "remove" ? "remove" : "add";
+
+  if (!propertyIds.length) {
+    throw new Error("Select at least one property");
+  }
+  if (!amenityIds.length && !serviceIds.length && !paidServiceIds.length) {
+    throw new Error("Select at least one amenity, service, or paid service");
+  }
+
+  const existingProps = db
+    .prepare(
+      `SELECT id FROM properties WHERE id IN (${propertyIds
+        .map(() => "?")
+        .join(",")})`
+    )
+    .all(...propertyIds)
+    .map((r) => r.id);
+  if (!existingProps.length) {
+    throw new Error("No matching properties found");
+  }
+
+  const addAmenity = db.prepare(
+    `INSERT OR IGNORE INTO property_amenities (property_id, amenity_id)
+     VALUES (?, ?)`
+  );
+  const removeAmenity = db.prepare(
+    `DELETE FROM property_amenities
+     WHERE property_id = ? AND amenity_id = ?`
+  );
+  const addService = db.prepare(
+    `INSERT OR IGNORE INTO property_services (property_id, service_id)
+     VALUES (?, ?)`
+  );
+  const removeService = db.prepare(
+    `DELETE FROM property_services
+     WHERE property_id = ? AND service_id = ?`
+  );
+  const addPaid = db.prepare(
+    `INSERT OR IGNORE INTO property_paid_services (property_id, paid_service_id)
+     VALUES (?, ?)`
+  );
+  const removePaid = db.prepare(
+    `DELETE FROM property_paid_services
+     WHERE property_id = ? AND paid_service_id = ?`
+  );
+
+  const validAmenities = amenityIds.filter((id) =>
+    db.prepare(`SELECT id FROM amenities WHERE id = ?`).get(id)
+  );
+  const validServices = serviceIds.filter((id) =>
+    db.prepare(`SELECT id FROM services WHERE id = ?`).get(id)
+  );
+  const validPaid = paidServiceIds.filter((id) =>
+    db.prepare(`SELECT id FROM paid_services WHERE id = ?`).get(id)
+  );
+
+  let linksTouched = 0;
+  const tx = db.transaction(() => {
+    existingProps.forEach((propertyId) => {
+      validAmenities.forEach((amenityId) => {
+        const info =
+          mode === "remove"
+            ? removeAmenity.run(propertyId, amenityId)
+            : addAmenity.run(propertyId, amenityId);
+        linksTouched += info.changes || 0;
+      });
+      validServices.forEach((serviceId) => {
+        const info =
+          mode === "remove"
+            ? removeService.run(propertyId, serviceId)
+            : addService.run(propertyId, serviceId);
+        linksTouched += info.changes || 0;
+      });
+      validPaid.forEach((paidId) => {
+        const info =
+          mode === "remove"
+            ? removePaid.run(propertyId, paidId)
+            : addPaid.run(propertyId, paidId);
+        linksTouched += info.changes || 0;
+      });
+    });
+  });
+  tx();
+
+  return {
+    mode,
+    propertyCount: existingProps.length,
+    amenityCount: validAmenities.length,
+    serviceCount: validServices.length,
+    paidServiceCount: validPaid.length,
+    linksTouched,
+    propertyIds: existingProps,
+  };
 }
 
 function setPropertyPaidServices(db, propertyId, paidServiceIds) {
@@ -1597,6 +1828,7 @@ module.exports = {
   setPropertyAmenities,
   setPropertyServices,
   setPropertyPaidServices,
+  bulkAssignPropertyExtras,
   setPropertyImages,
   setPropertyCoordinates,
   propertyGeocodeQuery,

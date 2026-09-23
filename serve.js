@@ -26,6 +26,7 @@ const {
   removePaidService,
   setPropertyImages,
   setPropertyCoordinates,
+  bulkAssignPropertyExtras,
   propertyGeocodeQuery,
   listPropertiesWithCoordinates,
   listPropertiesMissingCoordinates,
@@ -43,6 +44,7 @@ const {
   PRICING_TYPES,
 } = require("./server/db");
 const ors = require("./server/ors");
+const staffAuth = require("./server/staff-auth");
 
 const root = __dirname;
 const db = getDb();
@@ -58,6 +60,7 @@ const types = {
   ".webp": "image/webp",
   ".ico": "image/x-icon",
   ".json": "application/json; charset=utf-8",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
 };
 
 const rateBuckets = new Map();
@@ -82,11 +85,12 @@ function rateLimit(req, key, limit, windowMs) {
   return bucket.count <= limit;
 }
 
-function sendJson(res, status, body) {
+function sendJson(res, status, body, headers = {}) {
   const payload = JSON.stringify(body);
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
+    ...headers,
   });
   res.end(payload);
 }
@@ -215,7 +219,8 @@ function formatTravelSummary(distanceMeters, durationSeconds) {
 
 function modeLabel(mode) {
   if (mode === "bicycle") return "by bicycle";
-  if (mode === "walking") return "on foot";
+  if (mode === "walking" || mode === "foot") return "on foot";
+  if (mode === "bus") return "by bus";
   return "by car";
 }
 
@@ -287,6 +292,18 @@ async function handleApi(req, res, urlPath) {
       return sendJson(res, 200, {
         properties: listProperties(db, citySlug ? { citySlug } : {}),
       });
+    }
+
+    if (method === "POST" && urlPath === "/api/properties/bulk-assign") {
+      const body = await readBody(req);
+      try {
+        const result = bulkAssignPropertyExtras(db, body || {});
+        return sendJson(res, 200, result);
+      } catch (err) {
+        return sendJson(res, 400, {
+          error: err.message || "Bulk assign failed",
+        });
+      }
     }
 
     const propertySub = urlPath.match(
@@ -387,7 +404,7 @@ async function handleApi(req, res, urlPath) {
       const total = listProperties(db).length;
       return sendJson(res, 200, {
         configured: ors.isConfigured(),
-        modes: ["car", "bicycle", "walking"],
+        modes: ["car", "bicycle", "foot", "bus"],
         propertiesWithCoordinates: withCoords,
         propertiesTotal: total,
       });
@@ -448,7 +465,7 @@ async function handleApi(req, res, urlPath) {
       const mode = String(body.mode || "car").trim();
       if (!ors.profileForMode(mode)) {
         return sendJson(res, 400, {
-          error: "Choose car, bicycle, or walking.",
+          error: "Choose car, bicycle, foot, or bus.",
         });
       }
 
@@ -557,6 +574,16 @@ async function handleApi(req, res, urlPath) {
           return ad - bd;
         });
 
+      let resultMessage = null;
+      if (mode === "bus") {
+        approximate = true;
+        resultMessage =
+          "Bus times are estimated from road routing and may differ from real schedules.";
+      } else if (approximate) {
+        resultMessage =
+          "We couldn't calculate exact travel times right now. Showing approximate distances instead.";
+      }
+
       return sendJson(res, 200, {
         workplace: {
           lat,
@@ -565,9 +592,7 @@ async function handleApi(req, res, urlPath) {
         },
         mode,
         approximate,
-        message: approximate
-          ? "We couldn't calculate exact travel times right now. Showing approximate distances instead."
-          : null,
+        message: resultMessage,
         results,
       });
     }
@@ -700,6 +725,261 @@ async function handleApi(req, res, urlPath) {
       return sendJson(res, 200, result);
     }
 
+    // --- Staff auth & availability calendar ---
+
+    if (method === "GET" && urlPath === "/api/staff/me") {
+      const session = staffAuth.getSessionUser(db, req);
+      return sendJson(res, 200, {
+        user: session ? session.user : null,
+        inviteRequired: !!staffAuth.getStaffInviteCode(),
+        firstUser: staffAuth.countStaffUsers(db) === 0,
+        statuses: staffAuth.AVAILABILITY_STATUSES,
+        statusLabels: staffAuth.AVAILABILITY_STATUS_LABELS,
+        dayTaskTypes: staffAuth.DAY_TASK_TYPES,
+        dayTaskLabels: staffAuth.DAY_TASK_LABELS,
+        dailyTaskTypes: staffAuth.DAILY_TASK_TYPES,
+        checkInTaskTypes: staffAuth.CHECK_IN_TASK_TYPES,
+        checkOutTaskTypes: staffAuth.CHECK_OUT_TASK_TYPES,
+      });
+    }
+
+    if (method === "POST" && urlPath === "/api/staff/register") {
+      if (!rateLimit(req, "staff-register", 10, 60_000)) {
+        return sendJson(res, 429, { error: "Too many attempts. Try again soon." });
+      }
+      const body = await readBody(req);
+      const user = staffAuth.createStaffUser(db, body || {});
+      const session = staffAuth.createStaffSession(db, user.id);
+      return sendJson(
+        res,
+        201,
+        { user },
+        {
+          "Set-Cookie": staffAuth.sessionCookieHeader(
+            session.token,
+            session.maxAgeSeconds
+          ),
+        }
+      );
+    }
+
+    if (method === "POST" && urlPath === "/api/staff/login") {
+      if (!rateLimit(req, "staff-login", 20, 60_000)) {
+        return sendJson(res, 429, { error: "Too many attempts. Try again soon." });
+      }
+      const body = await readBody(req);
+      const user = staffAuth.authenticateStaffUser(
+        db,
+        body && body.email,
+        body && body.password
+      );
+      const session = staffAuth.createStaffSession(db, user.id);
+      return sendJson(
+        res,
+        200,
+        { user },
+        {
+          "Set-Cookie": staffAuth.sessionCookieHeader(
+            session.token,
+            session.maxAgeSeconds
+          ),
+        }
+      );
+    }
+
+    if (method === "POST" && urlPath === "/api/staff/logout") {
+      const session = staffAuth.getSessionUser(db, req);
+      if (session) staffAuth.destroyStaffSession(db, session.token);
+      return sendJson(
+        res,
+        200,
+        { ok: true },
+        { "Set-Cookie": staffAuth.clearSessionCookieHeader() }
+      );
+    }
+
+    if (method === "GET" && urlPath === "/api/staff/users") {
+      const session = staffAuth.requireManager(db, req, res, sendJson);
+      if (!session) return;
+      return sendJson(res, 200, {
+        users: staffAuth.listStaffUsers(db),
+        managerCount: staffAuth.countManagers(db),
+        adminCount: staffAuth.countAdmins(db),
+        isAdmin: staffAuth.isAdmin(session.user),
+      });
+    }
+
+    if (method === "PUT" && urlPath.match(/^\/api\/staff\/users\/\d+\/role$/)) {
+      const session = staffAuth.requireManager(db, req, res, sendJson);
+      if (!session) return;
+      const id = Number(urlPath.split("/")[4]);
+      const body = await readBody(req);
+      try {
+        const user = staffAuth.setStaffUserRole(
+          db,
+          id,
+          body && body.role,
+          session.user
+        );
+        return sendJson(res, 200, {
+          user,
+          managerCount: staffAuth.countManagers(db),
+          adminCount: staffAuth.countAdmins(db),
+        });
+      } catch (err) {
+        return sendJson(res, 400, {
+          error: err.message || "Could not update role",
+        });
+      }
+    }
+
+    if (method === "PUT" && urlPath.match(/^\/api\/staff\/users\/\d+\/active$/)) {
+      const session = staffAuth.requireAdmin(db, req, res, sendJson);
+      if (!session) return;
+      const id = Number(urlPath.split("/")[4]);
+      const body = await readBody(req);
+      try {
+        const user = staffAuth.setStaffUserActive(
+          db,
+          id,
+          !!(body && body.active),
+          session.user
+        );
+        return sendJson(res, 200, {
+          user,
+          managerCount: staffAuth.countManagers(db),
+          adminCount: staffAuth.countAdmins(db),
+        });
+      } catch (err) {
+        return sendJson(res, 400, {
+          error: err.message || "Could not update user",
+        });
+      }
+    }
+
+    if (
+      method === "PUT" &&
+      urlPath.match(/^\/api\/staff\/users\/\d+\/password$/)
+    ) {
+      const session = staffAuth.requireAdmin(db, req, res, sendJson);
+      if (!session) return;
+      const id = Number(urlPath.split("/")[4]);
+      const body = await readBody(req);
+      try {
+        const user = staffAuth.resetStaffUserPassword(
+          db,
+          id,
+          body && body.password,
+          session.user
+        );
+        return sendJson(res, 200, { user, ok: true });
+      } catch (err) {
+        return sendJson(res, 400, {
+          error: err.message || "Could not reset password",
+        });
+      }
+    }
+
+    if (method === "GET" && urlPath === "/api/staff/availability") {
+      const session = staffAuth.requireStaff(db, req, res, sendJson);
+      if (!session) return;
+      const u = new URL(req.url, "http://127.0.0.1");
+      const blocks = staffAuth.listAvailabilityBlocks(db, {
+        propertyId: u.searchParams.get("propertyId") || "",
+        citySlug: u.searchParams.get("city") || u.searchParams.get("citySlug") || "",
+        from: u.searchParams.get("from") || "",
+        to: u.searchParams.get("to") || "",
+      });
+      return sendJson(res, 200, {
+        blocks,
+        canEdit: staffAuth.canEditOps(session.user),
+        statuses: staffAuth.AVAILABILITY_STATUSES,
+        statusLabels: staffAuth.AVAILABILITY_STATUS_LABELS,
+        dayTaskTypes: staffAuth.DAY_TASK_TYPES,
+        dayTaskLabels: staffAuth.DAY_TASK_LABELS,
+        dailyTaskTypes: staffAuth.DAILY_TASK_TYPES,
+        checkInTaskTypes: staffAuth.CHECK_IN_TASK_TYPES,
+        checkOutTaskTypes: staffAuth.CHECK_OUT_TASK_TYPES,
+        staffUsers:
+          staffAuth.canEditOps(session.user)
+            ? staffAuth.listStaffUsers(db).filter(function (u) {
+                return u.active;
+              })
+            : [],
+      });
+    }
+
+    if (method === "GET" && urlPath === "/api/staff/my-schedule") {
+      const session = staffAuth.requireStaff(db, req, res, sendJson);
+      if (!session) return;
+      const u = new URL(req.url, "http://127.0.0.1");
+      const tasks = staffAuth.listMySchedule(db, session.user.id, {
+        from: u.searchParams.get("from") || "",
+        to: u.searchParams.get("to") || "",
+      });
+      return sendJson(res, 200, {
+        tasks,
+        from: u.searchParams.get("from") || null,
+        to: u.searchParams.get("to") || null,
+        user: session.user,
+      });
+    }
+
+    if (
+      method === "PUT" &&
+      urlPath.match(/^\/api\/staff\/tasks\/\d+\/complete$/)
+    ) {
+      const session = staffAuth.requireStaff(db, req, res, sendJson);
+      if (!session) return;
+      const id = Number(urlPath.split("/")[4]);
+      const body = await readBody(req);
+      try {
+        const task = staffAuth.setDayTaskCompleted(
+          db,
+          id,
+          !!(body && body.completed),
+          session.user
+        );
+        if (!task) return sendJson(res, 404, { error: "Task not found" });
+        return sendJson(res, 200, { task });
+      } catch (err) {
+        return sendJson(res, 403, {
+          error: err.message || "Could not update task",
+        });
+      }
+    }
+
+    if (method === "POST" && urlPath === "/api/staff/availability") {
+      const session = staffAuth.requireManager(db, req, res, sendJson);
+      if (!session) return;
+      const body = await readBody(req);
+      const block = staffAuth.createAvailabilityBlock(
+        db,
+        body || {},
+        session.user.id
+      );
+      return sendJson(res, 201, { block });
+    }
+
+    if (method === "PUT" && urlPath.startsWith("/api/staff/availability/")) {
+      const session = staffAuth.requireManager(db, req, res, sendJson);
+      if (!session) return;
+      const id = Number(urlPath.slice("/api/staff/availability/".length));
+      const body = await readBody(req);
+      const block = staffAuth.updateAvailabilityBlock(db, id, body || {});
+      if (!block) return sendJson(res, 404, { error: "Block not found" });
+      return sendJson(res, 200, { block });
+    }
+
+    if (method === "DELETE" && urlPath.startsWith("/api/staff/availability/")) {
+      const session = staffAuth.requireManager(db, req, res, sendJson);
+      if (!session) return;
+      const id = Number(urlPath.slice("/api/staff/availability/".length));
+      const ok = staffAuth.deleteAvailabilityBlock(db, id);
+      if (!ok) return sendJson(res, 404, { error: "Block not found" });
+      return sendJson(res, 200, { ok: true });
+    }
+
     return sendJson(res, 404, { error: "API route not found" });
   } catch (err) {
     return sendJson(res, 400, { error: err.message || "Request failed" });
@@ -707,7 +987,13 @@ async function handleApi(req, res, urlPath) {
 }
 
 function serveStatic(req, res, urlPath) {
-  let filePath = path.join(root, urlPath === "/" ? "index.html" : urlPath);
+  const aliases = {
+    "/favicon.ico": "/assets/favicon.ico",
+    "/apple-touch-icon.png": "/assets/apple-touch-icon.png",
+    "/site.webmanifest": "/assets/site.webmanifest",
+  };
+  const resolvedPath = aliases[urlPath] || urlPath;
+  let filePath = path.join(root, resolvedPath === "/" ? "index.html" : resolvedPath);
   if (!filePath.startsWith(root)) {
     res.writeHead(403);
     res.end("Forbidden");
@@ -746,6 +1032,7 @@ const PORT = Number(process.env.PORT) || 8767;
 server.listen(PORT, "127.0.0.1", () => {
   console.log("MSA Stay server http://127.0.0.1:" + PORT);
   console.log("Admin: http://127.0.0.1:" + PORT + "/admin/");
+  console.log("Staff calendar: http://127.0.0.1:" + PORT + "/staff/");
   if (!getOrsApiKey()) {
     console.log(
       "Workplace search: set OPENROUTESERVICE_API_KEY in .env to enable."
